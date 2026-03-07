@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.pem
+*.p12
+*.key
+CLAUDE.local.md
+.DS_Store
