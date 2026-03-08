@@ -55,8 +55,8 @@ Match the ExifTool component in `faffweasel-full-mockup.jsx`.
 | bg | `#f0f0ec` | `#111111` |
 | surface | `#ffffff` | `#1a1a1a` |
 | text | `#1a1a1a` | `#c8c8c0` |
-| muted | `#888888` | `#666666` |
-| faint | `#aaaaaa` | `#555555` |
+| muted | `#888888` | `#999999` |
+| faint | `#aaaaaa` | `#808080` |
 | accent (teal) | `#007070` | `#008080` |
 | border | `#c8c8c0` | `#2a2a2a` |
 

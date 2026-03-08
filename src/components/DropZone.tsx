@@ -31,9 +31,9 @@ export function DropZone({ isDark }: Props) {
   const dragCount = useRef(0); // counter to avoid flicker when cursor moves over child elements
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const teal = isDark ? '#008080' : '#007070';
-  const muted = isDark ? '#666666' : '#888888';
-  const faint = isDark ? '#555555' : '#aaaaaa';
+  const teal = isDark ? '#00a3a3' : '#007070';
+  const muted = isDark ? '#999999' : '#888888';
+  const faint = isDark ? '#808080' : '#aaaaaa';
 
   function handleFile(file: File) {
     setUiState({ status: 'processing' });
@@ -122,45 +122,45 @@ export function DropZone({ isDark }: Props) {
           transition: 'border-color 0.15s ease, background-color 0.15s ease',
           fontFamily: '"Courier New", Courier, monospace',
         }}
-        className={`px-6 py-12 text-center mb-6 ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
+        className={`px-6 py-8 text-center mb-6 ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
       >
         {uiState.status === 'idle' && (
           <>
-            <div className="text-[28px] mb-2.5" style={{ opacity: 0.4, color: muted }}>+</div>
-            <div className="text-[13px] mb-1" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
+            <div className="text-[32px] mb-2.5" style={{ opacity: 0.4, color: muted }}>+</div>
+            <div className="text-[16px] mb-1" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
               Drop images here or click to select
             </div>
-            <div className="text-[11px]" style={{ color: faint }}>
+            <div className="text-[14px]" style={{ color: faint }}>
               JPEG · PNG · WebP — up to 50MB
             </div>
           </>
         )}
 
         {uiState.status === 'processing' && (
-          <div className="text-[13px]" style={{ color: muted }}>Processing...</div>
+          <div className="text-[16px]" style={{ color: muted }}>Processing...</div>
         )}
 
         {uiState.status === 'error' && (
           <>
-            <div className="text-[13px] mb-3" style={{ color: isDark ? '#c66666' : '#a44444' }}>
+            <div className="text-[16px] mb-3" style={{ color: isDark ? '#c66666' : '#a44444' }}>
               {uiState.message}
             </div>
-            <div className="text-[11px]" style={{ color: faint }}>Click to try another file</div>
+            <div className="text-[14px]" style={{ color: faint }}>Click to try another file</div>
           </>
         )}
 
         {uiState.status === 'done' && (
           <>
-            <div className="text-[13px] mb-4" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
+            <div className="text-[16px] mb-4" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
               <span style={{ color: teal }}>✓</span>{' '}
               {uiState.file.name}
               <span style={{ color: muted }}> ({formatBytes(uiState.file.size)})</span>
             </div>
 
-            <div className="flex gap-4 text-left text-[11px] max-w-[460px] mx-auto mb-4">
+            <div className="flex gap-4 text-left text-[14px] max-w-[460px] mx-auto mb-4">
               <div className="flex-1">
                 <div
-                  className="font-bold text-[10px] tracking-[1px] mb-1.5"
+                  className="font-bold text-[14px] tracking-[1px] mb-1.5"
                   style={{ color: isDark ? '#c66666' : '#a44444' }}
                 >
                   BEFORE (12 FIELDS)
@@ -185,7 +185,7 @@ export function DropZone({ isDark }: Props) {
 
               <div className="flex-1">
                 <div
-                  className="font-bold text-[10px] tracking-[1px] mb-1.5"
+                  className="font-bold text-[14px] tracking-[1px] mb-1.5"
                   style={{ color: teal }}
                 >
                   AFTER (0 FIELDS)
@@ -210,7 +210,7 @@ export function DropZone({ isDark }: Props) {
             <button
               type="button"
               onClick={handleDownload}
-              className="text-[12px] font-bold tracking-[0.5px] text-white px-6 py-2 cursor-pointer border-0"
+              className="text-[16px] font-bold tracking-[0.5px] text-white px-6 py-2 cursor-pointer border-0"
               style={{ background: teal }}
             >
               DOWNLOAD CLEAN IMAGE
@@ -219,7 +219,7 @@ export function DropZone({ isDark }: Props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setUiState({ status: 'idle' }); }}
-                className="text-[11px] cursor-pointer border-0 bg-transparent underline"
+                className="text-[14px] cursor-pointer border-0 bg-transparent underline"
                 style={{ color: teal }}
               >
                 Strip another image
