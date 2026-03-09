@@ -25,6 +25,26 @@ function w16(b: Uint8Array, i: number, v: number): void {
   b[i + 1] = v & 0xff;
 }
 
+function readN(b: Uint8Array, i: number, n: number): number {
+  switch (n) {
+    case 1: return b[i];
+    case 2: return r16(b, i);
+    case 4: return r32(b, i);
+    case 8: return r32(b, i) * 0x100000000 + r32(b, i + 4);
+    default: return 0;
+  }
+}
+
+function writeN(b: Uint8Array, i: number, n: number, v: number): void {
+  switch (n) {
+    case 1: b[i] = v & 0xff; break;
+    case 2: w16(b, i, v); break;
+    case 4: w32(b, i, v); break;
+    case 8: w32(b, i, Math.floor(v / 0x100000000)); w32(b, i + 4, v >>> 0); break;
+    default: break;
+  }
+}
+
 function asciiz(b: Uint8Array, pos: number, end: number): { str: string; next: number } {
   let str = '';
   while (pos < end && b[pos] !== 0) str += String.fromCharCode(b[pos++]);
@@ -64,12 +84,23 @@ function scanBoxes(src: Uint8Array, start: number, end: number): RawBox[] {
   while (pos + 8 <= end) {
     const size = r32(src, pos);
     const type = String.fromCharCode(src[pos + 4], src[pos + 5], src[pos + 6], src[pos + 7]);
-    if (size === 1) throw new Error(`64-bit box size unsupported (type=${type}, offset=${pos})`);
-    const actual = size === 0 ? end - pos : size;
-    if (actual < 8) throw new Error(`Invalid box size ${actual} at offset ${pos}`);
+
+    let actual: number;
+    if (size === 1) {
+      // 64-bit extended size: 16-byte header (size + type + largesize)
+      if (pos + 16 > end) throw new Error(`Truncated 64-bit box header at offset ${pos}`);
+      actual = r32(src, pos + 8) * 0x100000000 + r32(src, pos + 12);
+      if (actual < 16) throw new Error(`Invalid 64-bit box size at offset ${pos}`);
+    } else if (size === 0) {
+      actual = end - pos;
+    } else {
+      actual = size;
+      if (actual < 8) throw new Error(`Invalid box size ${actual} at offset ${pos}`);
+    }
+
     result.push({ type, start: pos, size: actual });
     if (size === 0) break;
-    pos += size;
+    pos += actual;
   }
   return result;
 }
@@ -192,6 +223,67 @@ function rebuildIloc(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8A
   return buildBox('iloc', concat([fhdr, fieldSzBytes, count, ...kept]));
 }
 
+// --- iloc offset adjustment ---
+
+// After meta shrinks, mdat shifts earlier in the file. Absolute offsets in iloc
+// must be reduced by the size difference so they still point to the right data.
+function adjustIlocOffsets(iloc: Uint8Array, delta: number): Uint8Array {
+  const out = new Uint8Array(iloc.length);
+  out.set(iloc);
+
+  const version = out[8];
+  const fb1 = out[12];
+  const fb2 = out[13];
+  const offsetSz = (fb1 >> 4) & 0xf;
+  const lengthSz = fb1 & 0xf;
+  const baseOffsetSz = (fb2 >> 4) & 0xf;
+  const indexSz = version >= 1 ? fb2 & 0xf : 0;
+
+  const countSz = version < 2 ? 2 : 4;
+  const itemCount = version < 2 ? r16(out, 14) : r32(out, 14);
+  let pos = 14 + countSz;
+
+  for (let i = 0; i < itemCount; i++) {
+    pos += version < 2 ? 2 : 4; // item_ID
+
+    let constructionMethod = 0;
+    if (version >= 1) {
+      constructionMethod = r16(out, pos) & 0xf;
+      pos += 2;
+    }
+
+    pos += 2; // data_reference_index
+
+    const baseOffsetPos = pos;
+    const baseOffset = baseOffsetSz > 0 ? readN(out, pos, baseOffsetSz) : 0;
+    pos += baseOffsetSz;
+
+    const extentCount = r16(out, pos);
+    pos += 2;
+
+    // Only adjust file-offset items (construction_method == 0)
+    const shouldAdjust = constructionMethod === 0;
+    // If base_offset is present and non-zero, adjust it and leave extent offsets alone.
+    // Otherwise adjust each extent_offset individually.
+    const adjustBase = shouldAdjust && baseOffsetSz > 0 && baseOffset > 0;
+
+    if (adjustBase) {
+      writeN(out, baseOffsetPos, baseOffsetSz, baseOffset - delta);
+    }
+
+    for (let j = 0; j < extentCount; j++) {
+      if (version >= 1 && indexSz > 0) pos += indexSz;
+      if (shouldAdjust && !adjustBase && offsetSz > 0) {
+        writeN(out, pos, offsetSz, readN(out, pos, offsetSz) - delta);
+      }
+      pos += offsetSz;
+      pos += lengthSz;
+    }
+  }
+
+  return out;
+}
+
 // --- iref (item reference box) ---
 
 function rebuildIref(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8Array {
@@ -249,7 +341,7 @@ function rebuildIref(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8A
 
 // --- meta ---
 
-function rebuildMeta(src: Uint8Array, b: RawBox): Uint8Array {
+function rebuildMeta(src: Uint8Array, b: RawBox, mdatAfterMeta: boolean): Uint8Array {
   const { start, size } = b;
   const fhdr = src.subarray(start + 8, start + 12); // FullBox version + flags
   const children = scanBoxes(src, start + 12, start + size);
@@ -267,6 +359,19 @@ function rebuildMeta(src: Uint8Array, b: RawBox): Uint8Array {
     return src.subarray(c.start, c.start + c.size);
   });
 
+  // Meta box shrank — if mdat follows, its file offset shifts earlier by delta.
+  // Adjust iloc absolute offsets so they still point to the right data in mdat.
+  if (mdatAfterMeta) {
+    const newMetaSize = 8 + 4 + newChildren.reduce((s, c) => s + c.length, 0);
+    const delta = size - newMetaSize;
+    if (delta > 0) {
+      const ilocIdx = children.findIndex(c => c.type === 'iloc');
+      if (ilocIdx !== -1) {
+        newChildren[ilocIdx] = adjustIlocOffsets(newChildren[ilocIdx], delta);
+      }
+    }
+  }
+
   return buildBox('meta', concat([fhdr, ...newChildren]));
 }
 
@@ -279,9 +384,13 @@ export function stripHeic(buffer: ArrayBuffer): Uint8Array {
   const topBoxes = scanBoxes(src, 0, src.length);
   if (!topBoxes.find(b => b.type === 'ftyp')) throw new Error('Not a valid HEIC: missing ftyp box');
 
+  const metaIdx = topBoxes.findIndex(b => b.type === 'meta');
+  const mdatIdx = topBoxes.findIndex(b => b.type === 'mdat');
+  const mdatAfterMeta = metaIdx !== -1 && mdatIdx !== -1 && mdatIdx > metaIdx;
+
   return concat(
     topBoxes.map(b =>
-      b.type === 'meta' ? rebuildMeta(src, b) : src.subarray(b.start, b.start + b.size),
+      b.type === 'meta' ? rebuildMeta(src, b, mdatAfterMeta) : src.subarray(b.start, b.start + b.size),
     ),
   );
 }

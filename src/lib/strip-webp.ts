@@ -1,4 +1,4 @@
-const REMOVE_CHUNKS = new Set(['EXIF', 'XMP ']);
+const REMOVE_CHUNKS = new Set(['EXIF', 'XMP ', 'XMP\x00']);
 
 function readUint32LE(src: Uint8Array, offset: number): number {
   return (src[offset] | (src[offset + 1] << 8) | (src[offset + 2] << 16) | (src[offset + 3] << 24)) >>> 0;
@@ -60,7 +60,7 @@ export function stripWebp(buffer: ArrayBuffer): Uint8Array {
   // VP8X is always the first chunk when present; its data starts at byte 20 (12 header + 8 chunk header)
   const firstType = String.fromCharCode(out[12], out[13], out[14], out[15]);
   if (firstType === 'VP8X') {
-    out[20] &= ~(0x20 | 0x10);
+    out[20] &= ~(0x08 | 0x04);
   }
 
   return out;
