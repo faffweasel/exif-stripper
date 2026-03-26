@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import type { StripResult } from '../lib/strip';
 import { stripMetadata } from '../lib/strip';
+import { MetadataPanel } from './MetadataPanel';
+import { MetadataSearch } from './MetadataSearch';
 
 interface Props {
   readonly isDark: boolean;
@@ -8,8 +10,16 @@ interface Props {
 
 type UIState =
   | { status: 'idle' }
-  | { status: 'processing' }
-  | { status: 'done'; file: File; result: StripResult; blob: Blob }
+  | { status: 'processing'; message: string }
+  | { status: 'preview'; file: File; originalBuffer: ArrayBuffer }
+  | {
+      status: 'done';
+      file: File;
+      result: StripResult;
+      blob: Blob;
+      originalBuffer: ArrayBuffer;
+      strippedBuffer: ArrayBuffer;
+    }
   | { status: 'error'; message: string };
 
 function formatBytes(n: number): string {
@@ -29,6 +39,7 @@ const MIME: Record<StripResult['format'], string> = {
 
 export function DropZone({ isDark }: Props) {
   const [uiState, setUiState] = useState<UIState>({ status: 'idle' });
+  const [filterText, setFilterText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const dragCount = useRef(0); // counter to avoid flicker when cursor moves over child elements
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,14 +53,27 @@ export function DropZone({ isDark }: Props) {
       setUiState({ status: 'error', message: 'File too large. Maximum size is 50 MB.' });
       return;
     }
-    setUiState({ status: 'processing' });
+    setUiState({ status: 'processing', message: 'Reading file...' });
     const reader = new FileReader();
     reader.onload = () => {
+      const buffer = reader.result as ArrayBuffer; // safe: readAsArrayBuffer always returns ArrayBuffer
+      setUiState({ status: 'preview', file, originalBuffer: buffer });
+    };
+    reader.onerror = () => setUiState({ status: 'error', message: 'Failed to read file.' });
+    reader.readAsArrayBuffer(file);
+  }
+
+  function handleStrip() {
+    if (uiState.status !== 'preview') return;
+    const { file, originalBuffer } = uiState;
+    setUiState({ status: 'processing', message: 'Stripping metadata...' });
+    // Defer strip to next task so the processing state paints before the synchronous work blocks the thread
+    setTimeout(() => {
       try {
-        const buffer = reader.result as ArrayBuffer; // safe: readAsArrayBuffer guarantees ArrayBuffer
-        const result = stripMetadata(buffer);
-        const blob = new Blob([result.data.buffer as ArrayBuffer], { type: MIME[result.format] });
-        setUiState({ status: 'done', file, result, blob });
+        const result = stripMetadata(originalBuffer);
+        const strippedBuffer = result.data.buffer as ArrayBuffer; // safe: strip functions return newly allocated Uint8Arrays
+        const blob = new Blob([strippedBuffer], { type: MIME[result.format] });
+        setUiState({ status: 'done', file, result, blob, originalBuffer, strippedBuffer });
       } catch (err) {
         const isUnsupported = err instanceof Error && err.message.startsWith('Unsupported format');
         setUiState({
@@ -59,9 +83,7 @@ export function DropZone({ isDark }: Props) {
             : `Failed to process ${file.name}. The file may be corrupted.`,
         });
       }
-    };
-    reader.onerror = () => setUiState({ status: 'error', message: 'Failed to read file.' });
-    reader.readAsArrayBuffer(file);
+    }, 0);
   }
 
   function handleDragEnter() {
@@ -79,12 +101,14 @@ export function DropZone({ isDark }: Props) {
     dragCount.current = 0;
     setIsDragging(false);
     setUiState({ status: 'idle' });
+    setFilterText('');
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     setUiState({ status: 'idle' });
+    setFilterText('');
     const file = e.target.files?.[0];
     if (file) handleFile(file);
     e.target.value = '';
@@ -98,7 +122,7 @@ export function DropZone({ isDark }: Props) {
     a.href = url;
     a.download = `stripped-${uiState.file.name}`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   const isClickable = uiState.status !== 'processing';
@@ -122,9 +146,12 @@ export function DropZone({ isDark }: Props) {
         onChange={handleInputChange}
       />
 
+      {/* biome-ignore lint/a11y/useSemanticElements: must be a div — drag events (onDragOver/onDrop) are unreliable on <button> across browsers */}
       <div
         onClick={() => isClickable && inputRef.current?.click()}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && isClickable && inputRef.current?.click()}
+        onKeyDown={(e) =>
+          (e.key === 'Enter' || e.key === ' ') && isClickable && inputRef.current?.click()
+        }
         onDragOver={(e) => e.preventDefault()}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -156,7 +183,7 @@ export function DropZone({ isDark }: Props) {
 
         {uiState.status === 'processing' && (
           <div className="text-[16px]" style={{ color: muted }}>
-            Processing...
+            {uiState.message}
           </div>
         )}
 
@@ -171,6 +198,37 @@ export function DropZone({ isDark }: Props) {
           </>
         )}
 
+        {uiState.status === 'preview' && (
+          <>
+            <div className="text-[16px] mb-4" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
+              {uiState.file.name}
+              <span style={{ color: muted }}> ({formatBytes(uiState.file.size)})</span>
+            </div>
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on metadata panel interactions */}
+            <div
+              className="text-left max-w-[460px] mx-auto"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <MetadataSearch value={filterText} onChange={setFilterText} isDark={isDark} />
+              <MetadataPanel
+                originalBuffer={uiState.originalBuffer}
+                fileName={uiState.file.name}
+                isDark={isDark}
+                filterText={filterText}
+              />
+              <button
+                type="button"
+                onClick={handleStrip}
+                className="w-full text-[16px] font-bold tracking-[0.5px] text-white py-2.5 mt-4 cursor-pointer border-0"
+                style={{ background: teal }}
+              >
+                STRIP METADATA
+              </button>
+            </div>
+          </>
+        )}
+
         {uiState.status === 'done' && (
           <>
             <div className="text-[16px] mb-4" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
@@ -178,54 +236,20 @@ export function DropZone({ isDark }: Props) {
               <span style={{ color: muted }}> ({formatBytes(uiState.file.size)})</span>
             </div>
 
-            <div className="flex gap-4 text-left text-[14px] max-w-[460px] mx-auto mb-4">
-              <div className="flex-1">
-                <div
-                  className="font-bold text-[14px] tracking-[1px] mb-1.5"
-                  style={{ color: isDark ? '#c66666' : '#a44444' }}
-                >
-                  BEFORE (12 FIELDS)
-                </div>
-                <div
-                  style={{
-                    background: isDark ? '#1e1515' : '#faf8f6',
-                    border: `1px solid ${isDark ? '#332222' : '#e0dcd8'}`,
-                    padding: 8,
-                    lineHeight: 1.8,
-                    color: muted,
-                  }}
-                >
-                  {/* TODO(complete): Replace hardcoded fields with real metadata from exifreader */}
-                  <div>Camera: iPhone 15 Pro</div>
-                  <div>GPS: 51.5074°N, 0.1278°W</div>
-                  <div>Date: 2026-03-08 14:32</div>
-                  <div>Software: iOS 19.3.1</div>
-                  <div style={{ color: faint }}>+ 8 more...</div>
-                </div>
-              </div>
-
-              <div className="flex-1">
-                <div
-                  className="font-bold text-[14px] tracking-[1px] mb-1.5"
-                  style={{ color: teal }}
-                >
-                  AFTER (0 FIELDS)
-                </div>
-                <div
-                  style={{
-                    background: isDark ? '#151e15' : '#f6faf6',
-                    border: `1px solid ${isDark ? '#223322' : '#d8e0d8'}`,
-                    padding: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: 100,
-                    color: teal,
-                  }}
-                >
-                  ✓ Clean
-                </div>
-              </div>
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on metadata panel interactions */}
+            <div
+              className="text-left max-w-[460px] mx-auto mb-4"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <MetadataSearch value={filterText} onChange={setFilterText} isDark={isDark} />
+              <MetadataPanel
+                originalBuffer={uiState.originalBuffer}
+                strippedBuffer={uiState.strippedBuffer}
+                fileName={uiState.file.name}
+                isDark={isDark}
+                filterText={filterText}
+              />
             </div>
 
             <button
@@ -234,13 +258,14 @@ export function DropZone({ isDark }: Props) {
               className="text-[16px] font-bold tracking-[0.5px] text-white px-6 py-2 cursor-pointer border-0"
               style={{ background: teal }}
             >
-              DOWNLOAD CLEAN IMAGE
+              DOWNLOAD CLEAN FILE
             </button>
             <div className="mt-3">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setFilterText('');
                   setUiState({ status: 'idle' });
                 }}
                 className="text-[14px] cursor-pointer border-0 bg-transparent underline"
