@@ -8,10 +8,21 @@ interface Props {
   readonly isDark: boolean;
 }
 
+interface FileEntry {
+  readonly file: File;
+  readonly status: 'queued' | 'processing' | 'done' | 'error' | 'skipped';
+  readonly result?: StripResult;
+  readonly blob?: Blob;
+  readonly originalBuffer?: ArrayBuffer;
+  readonly strippedBuffer?: ArrayBuffer;
+  readonly errorMessage?: string;
+}
+
 type UIState =
   | { status: 'idle' }
-  | { status: 'processing'; message: string }
+  | { status: 'error'; message: string }
   | { status: 'preview'; file: File; originalBuffer: ArrayBuffer }
+  | { status: 'processing'; message: string }
   | {
       status: 'done';
       file: File;
@@ -20,7 +31,7 @@ type UIState =
       originalBuffer: ArrayBuffer;
       strippedBuffer: ArrayBuffer;
     }
-  | { status: 'error'; message: string };
+  | { status: 'batch'; entries: readonly FileEntry[]; isComplete: boolean };
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -29,6 +40,7 @@ function formatBytes(n: number): string {
 }
 
 const MAX_SIZE = 50 * 1024 * 1024;
+const MAX_FILES = 20;
 
 const MIME: Record<StripResult['format'], string> = {
   jpeg: 'image/jpeg',
@@ -37,38 +49,213 @@ const MIME: Record<StripResult['format'], string> = {
   heic: 'image/heic',
 };
 
+function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer); // safe: readAsArrayBuffer always returns ArrayBuffer
+    reader.onerror = () => reject(new Error('read error'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+interface FileRowProps {
+  readonly entry: FileEntry;
+  readonly isDark: boolean;
+  readonly isSelected: boolean;
+  readonly onSelect: () => void;
+  readonly onDownload: () => void;
+}
+
+function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowProps) {
+  const teal = isDark ? '#00a3a3' : '#007070';
+  const muted = isDark ? '#999999' : '#888888';
+  const faint = isDark ? '#808080' : '#aaaaaa';
+  const text = isDark ? '#c8c8c0' : '#1a1a1a';
+  const red = isDark ? '#c66666' : '#a44444';
+  const border = isDark ? '#2a2a2a' : '#c8c8c0';
+  const mono = '"Courier New", Courier, monospace';
+
+  const STATUS_ICON: Record<FileEntry['status'], string> = {
+    queued: '○',
+    processing: '·',
+    done: '✓',
+    error: '✗',
+    skipped: '—',
+  };
+  const STATUS_COLOR: Record<FileEntry['status'], string> = {
+    queued: faint,
+    processing: muted,
+    done: teal,
+    error: red,
+    skipped: faint,
+  };
+
+  const isSelectable = entry.originalBuffer !== undefined;
+
+  const rowContent = (
+    <>
+      <span style={{ flexShrink: 0, width: 14, color: STATUS_COLOR[entry.status] }}>
+        {STATUS_ICON[entry.status]}
+      </span>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          textAlign: 'left',
+          color: text,
+        }}
+      >
+        {entry.file.name}
+      </span>
+      {entry.status === 'done' && entry.result && (
+        <span style={{ color: muted, flexShrink: 0, fontSize: 12 }}>
+          {formatBytes(entry.result.originalSize)} → {formatBytes(entry.result.strippedSize)}
+        </span>
+      )}
+      {entry.status === 'processing' && (
+        <span style={{ color: muted, flexShrink: 0 }}>Processing...</span>
+      )}
+    </>
+  );
+
+  return (
+    <div
+      style={{
+        borderBottom: `1px solid ${border}`,
+        background: isSelected
+          ? isDark
+            ? 'rgba(0,163,163,0.08)'
+            : 'rgba(0,112,112,0.05)'
+          : 'transparent',
+        fontFamily: mono,
+        fontSize: 14,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {isSelectable ? (
+          <button
+            type="button"
+            onClick={onSelect}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flex: 1,
+              minWidth: 0,
+              padding: '7px 0',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: mono,
+              fontSize: 14,
+            }}
+          >
+            {rowContent}
+          </button>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flex: 1,
+              minWidth: 0,
+              padding: '7px 0',
+            }}
+          >
+            {rowContent}
+          </div>
+        )}
+        {entry.status === 'done' && entry.blob && (
+          <button
+            type="button"
+            onClick={onDownload}
+            style={{
+              color: teal,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: mono,
+              fontSize: 14,
+              flexShrink: 0,
+              padding: '7px 0 7px 8px',
+            }}
+          >
+            Download
+          </button>
+        )}
+      </div>
+      {(entry.status === 'error' || entry.status === 'skipped') && entry.errorMessage && (
+        <div
+          style={{
+            color: entry.status === 'error' ? red : faint,
+            fontSize: 12,
+            paddingLeft: 22,
+            paddingBottom: 4,
+          }}
+        >
+          {entry.errorMessage}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DropZone({ isDark }: Props) {
   const [uiState, setUiState] = useState<UIState>({ status: 'idle' });
   const [filterText, setFilterText] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragCount = useRef(0); // counter to avoid flicker when cursor moves over child elements
   const inputRef = useRef<HTMLInputElement>(null);
+  const sessionRef = useRef(0); // incremented on each new file/batch to cancel stale async work
 
   const teal = isDark ? '#00a3a3' : '#007070';
   const muted = isDark ? '#999999' : '#888888';
   const faint = isDark ? '#808080' : '#aaaaaa';
 
-  function handleFile(file: File) {
+  function handleSingleFile(file: File) {
     if (file.size > MAX_SIZE) {
       setUiState({ status: 'error', message: 'File too large. Maximum size is 50 MB.' });
       return;
     }
+    const session = sessionRef.current;
     setUiState({ status: 'processing', message: 'Reading file...' });
     const reader = new FileReader();
     reader.onload = () => {
+      if (sessionRef.current !== session) return;
       const buffer = reader.result as ArrayBuffer; // safe: readAsArrayBuffer always returns ArrayBuffer
       setUiState({ status: 'preview', file, originalBuffer: buffer });
     };
-    reader.onerror = () => setUiState({ status: 'error', message: 'Failed to read file.' });
+    reader.onerror = () => {
+      if (sessionRef.current !== session) return;
+      setUiState({ status: 'error', message: 'Failed to read file.' });
+    };
     reader.readAsArrayBuffer(file);
   }
 
   function handleStrip() {
     if (uiState.status !== 'preview') return;
     const { file, originalBuffer } = uiState;
+    const session = sessionRef.current;
     setUiState({ status: 'processing', message: 'Stripping metadata...' });
-    // Defer strip to next task so the processing state paints before the synchronous work blocks the thread
+    // Defer to next task so the processing state paints before the synchronous strip blocks the thread
     setTimeout(() => {
+      if (sessionRef.current !== session) return;
       try {
         const result = stripMetadata(originalBuffer);
         const strippedBuffer = result.data.buffer as ArrayBuffer; // safe: strip functions return newly allocated Uint8Arrays
@@ -86,6 +273,80 @@ export function DropZone({ isDark }: Props) {
     }, 0);
   }
 
+  async function processBatch(files: File[], session: number): Promise<void> {
+    const draft: FileEntry[] = files.map((file) => ({ file, status: 'queued' }));
+    setUiState({ status: 'batch', entries: [...draft], isComplete: false });
+
+    for (let i = 0; i < files.length; i++) {
+      if (sessionRef.current !== session) return;
+
+      const file = files[i];
+      draft[i] = { file, status: 'processing' };
+      setUiState({ status: 'batch', entries: [...draft], isComplete: false });
+
+      if (file.size > MAX_SIZE) {
+        draft[i] = { file, status: 'skipped', errorMessage: 'File too large (50 MB limit)' };
+        setUiState({ status: 'batch', entries: [...draft], isComplete: false });
+        continue;
+      }
+
+      let buffer: ArrayBuffer;
+      try {
+        buffer = await readFileAsArrayBuffer(file);
+      } catch {
+        draft[i] = { file, status: 'error', errorMessage: 'Failed to read file.' };
+        setUiState({ status: 'batch', entries: [...draft], isComplete: false });
+        continue;
+      }
+
+      if (sessionRef.current !== session) return;
+
+      try {
+        const result = stripMetadata(buffer);
+        const strippedBuffer = result.data.buffer as ArrayBuffer; // safe: strip functions return newly allocated Uint8Arrays
+        const blob = new Blob([strippedBuffer], { type: MIME[result.format] });
+        draft[i] = { file, status: 'done', result, blob, originalBuffer: buffer, strippedBuffer };
+      } catch (err) {
+        const isUnsupported = err instanceof Error && err.message.startsWith('Unsupported format');
+        draft[i] = {
+          file,
+          status: 'error',
+          errorMessage: isUnsupported
+            ? 'Unsupported format. Supported: JPEG, PNG, WebP, HEIC.'
+            : 'Failed to process file. The file may be corrupted.',
+          originalBuffer: buffer, // retain so metadata preview works even on unsupported files
+        };
+      }
+      setUiState({ status: 'batch', entries: [...draft], isComplete: false });
+    }
+
+    if (sessionRef.current !== session) return;
+    setUiState({ status: 'batch', entries: [...draft], isComplete: true });
+  }
+
+  function handleFileList(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
+
+    if (files.length > MAX_FILES) {
+      setUiState({
+        status: 'error',
+        message: `Maximum 20 files at once. You selected ${files.length}.`,
+      });
+      return;
+    }
+
+    sessionRef.current++;
+    setFilterText('');
+    setSelectedIndex(null);
+
+    if (files.length === 1) {
+      handleSingleFile(files[0]);
+    } else {
+      void processBatch(files, sessionRef.current);
+    }
+  }
+
   function handleDragEnter() {
     dragCount.current++;
     setIsDragging(true);
@@ -100,33 +361,23 @@ export function DropZone({ isDark }: Props) {
     e.preventDefault();
     dragCount.current = 0;
     setIsDragging(false);
-    setUiState({ status: 'idle' });
-    setFilterText('');
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    handleFileList(e.dataTransfer.files);
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setUiState({ status: 'idle' });
-    setFilterText('');
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    handleFileList(e.target.files);
     e.target.value = '';
   }
 
-  function handleDownload(e: React.MouseEvent) {
+  function handleReset(e: React.MouseEvent) {
     e.stopPropagation();
-    if (uiState.status !== 'done') return;
-    const url = URL.createObjectURL(uiState.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `stripped-${uiState.file.name}`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    sessionRef.current++;
+    setFilterText('');
+    setSelectedIndex(null);
+    setUiState({ status: 'idle' });
   }
 
-  const isClickable = uiState.status !== 'processing';
-
+  const isClickable = uiState.status === 'idle' || uiState.status === 'error';
   const borderColor = isDragging ? teal : isDark ? '#333333' : '#b0b0a8';
   const bgColor = isDragging
     ? isDark
@@ -136,11 +387,17 @@ export function DropZone({ isDark }: Props) {
       ? '#1a1a1a'
       : '#ffffff';
 
+  const batchProcessingIdx =
+    uiState.status === 'batch' ? uiState.entries.findIndex((e) => e.status === 'processing') : -1;
+  const batchSelected =
+    uiState.status === 'batch' && selectedIndex !== null ? uiState.entries[selectedIndex] : null;
+
   return (
     <>
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept=".jpg,.jpeg,.png,.webp,.heic,.heif"
         className="hidden"
         onChange={handleInputChange}
@@ -176,7 +433,7 @@ export function DropZone({ isDark }: Props) {
               Drop images here or click to select
             </div>
             <div className="text-[14px]" style={{ color: faint }}>
-              JPEG · PNG · WebP — up to 50MB
+              JPEG · PNG · WebP — up to 50 MB, 20 files max
             </div>
           </>
         )}
@@ -235,10 +492,9 @@ export function DropZone({ isDark }: Props) {
               <span style={{ color: teal }}>✓</span> {uiState.file.name}
               <span style={{ color: muted }}> ({formatBytes(uiState.file.size)})</span>
             </div>
-
             {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on metadata panel interactions */}
             <div
-              className="text-left max-w-[460px] mx-auto mb-4"
+              className="text-left max-w-[460px] mx-auto"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
@@ -250,29 +506,82 @@ export function DropZone({ isDark }: Props) {
                 isDark={isDark}
                 filterText={filterText}
               />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="text-[16px] font-bold tracking-[0.5px] text-white px-6 py-2 cursor-pointer border-0"
-              style={{ background: teal }}
-            >
-              DOWNLOAD CLEAN FILE
-            </button>
-            <div className="mt-3">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setFilterText('');
-                  setUiState({ status: 'idle' });
+                  triggerDownload(uiState.blob, `stripped-${uiState.file.name}`);
                 }}
-                className="text-[14px] cursor-pointer border-0 bg-transparent underline"
-                style={{ color: teal }}
+                className="w-full text-[16px] font-bold tracking-[0.5px] text-white py-2.5 mt-4 cursor-pointer border-0"
+                style={{ background: teal }}
               >
-                Strip another image
+                DOWNLOAD CLEAN FILE
               </button>
+              <div className="mt-3 text-center">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="text-[14px] cursor-pointer border-0 bg-transparent underline"
+                  style={{ color: teal }}
+                >
+                  Strip another image
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {uiState.status === 'batch' && (
+          <>
+            {!uiState.isComplete && batchProcessingIdx >= 0 && (
+              <div className="text-[14px] mb-3" style={{ color: muted }}>
+                Processing {batchProcessingIdx + 1} of {uiState.entries.length}...
+              </div>
+            )}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on file list interactions */}
+            <div
+              className="text-left max-w-[460px] mx-auto"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <div className="mb-2">
+                {uiState.entries.map((entry, i) => (
+                  <FileRow
+                    key={`${entry.file.name}-${entry.file.size}-${entry.file.lastModified}`}
+                    entry={entry}
+                    isDark={isDark}
+                    isSelected={selectedIndex === i}
+                    onSelect={() => setSelectedIndex((prev) => (prev === i ? null : i))}
+                    onDownload={() =>
+                      entry.blob && triggerDownload(entry.blob, `stripped-${entry.file.name}`)
+                    }
+                  />
+                ))}
+              </div>
+              {batchSelected !== null && batchSelected.originalBuffer !== undefined && (
+                <div className="mt-4">
+                  <MetadataSearch value={filterText} onChange={setFilterText} isDark={isDark} />
+                  <MetadataPanel
+                    originalBuffer={batchSelected.originalBuffer}
+                    strippedBuffer={batchSelected.strippedBuffer}
+                    fileName={batchSelected.file.name}
+                    isDark={isDark}
+                    filterText={filterText}
+                  />
+                </div>
+              )}
+              {uiState.isComplete && (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="text-[14px] cursor-pointer border-0 bg-transparent underline"
+                    style={{ color: teal }}
+                  >
+                    Strip another batch
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}
