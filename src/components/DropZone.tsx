@@ -1,3 +1,4 @@
+import { zipSync } from 'fflate';
 import { useRef, useState } from 'react';
 import type { StripResult } from '../lib/strip';
 import { stripMetadata } from '../lib/strip';
@@ -9,6 +10,7 @@ interface Props {
 }
 
 interface FileEntry {
+  readonly id: number;
   readonly file: File;
   readonly status: 'queued' | 'processing' | 'done' | 'error' | 'skipped';
   readonly result?: StripResult;
@@ -69,6 +71,26 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function downloadAllAsZip(entries: readonly FileEntry[]): void {
+  const files: Record<string, [Uint8Array, { level: 0 }]> = {};
+  for (const entry of entries) {
+    if (entry.status === 'done' && entry.result) {
+      files[entry.file.name] = [entry.result.data, { level: 0 }];
+    }
+  }
+  const zip = zipSync(files);
+  const blob = new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }); // safe: fflate always allocates plain ArrayBuffer
+  triggerDownload(blob, 'stripped-images.zip');
+}
+
+const STATUS_ICON: Record<FileEntry['status'], string> = {
+  queued: '○',
+  processing: '·',
+  done: '✓',
+  error: '✗',
+  skipped: '—',
+};
+
 interface FileRowProps {
   readonly entry: FileEntry;
   readonly isDark: boolean;
@@ -86,26 +108,20 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
   const border = isDark ? '#2a2a2a' : '#c8c8c0';
   const mono = '"Courier New", Courier, monospace';
 
-  const STATUS_ICON: Record<FileEntry['status'], string> = {
-    queued: '○',
-    processing: '·',
-    done: '✓',
-    error: '✗',
-    skipped: '—',
-  };
-  const STATUS_COLOR: Record<FileEntry['status'], string> = {
-    queued: faint,
-    processing: muted,
-    done: teal,
-    error: red,
-    skipped: faint,
-  };
+  const statusIconColor =
+    entry.status === 'done'
+      ? teal
+      : entry.status === 'error'
+        ? red
+        : entry.status === 'processing'
+          ? muted
+          : faint;
 
   const isSelectable = entry.originalBuffer !== undefined;
 
   const rowContent = (
     <>
-      <span style={{ flexShrink: 0, width: 14, color: STATUS_COLOR[entry.status] }}>
+      <span style={{ flexShrink: 0, width: 14, color: statusIconColor }}>
         {STATUS_ICON[entry.status]}
       </span>
       <span
@@ -258,9 +274,17 @@ export function DropZone({ isDark }: Props) {
       if (sessionRef.current !== session) return;
       try {
         const result = stripMetadata(originalBuffer);
-        const strippedBuffer = result.data.buffer as ArrayBuffer; // safe: strip functions return newly allocated Uint8Arrays
-        const blob = new Blob([strippedBuffer], { type: MIME[result.format] });
-        setUiState({ status: 'done', file, result, blob, originalBuffer, strippedBuffer });
+        // slice() gives a fresh Uint8Array<ArrayBuffer> — correct byte range, no subarray ambiguity
+        const stripped = result.data.slice();
+        const blob = new Blob([stripped], { type: MIME[result.format] });
+        setUiState({
+          status: 'done',
+          file,
+          result,
+          blob,
+          originalBuffer,
+          strippedBuffer: stripped.buffer,
+        });
       } catch (err) {
         const isUnsupported = err instanceof Error && err.message.startsWith('Unsupported format');
         setUiState({
@@ -274,18 +298,18 @@ export function DropZone({ isDark }: Props) {
   }
 
   async function processBatch(files: File[], session: number): Promise<void> {
-    const draft: FileEntry[] = files.map((file) => ({ file, status: 'queued' }));
+    const draft: FileEntry[] = files.map((file, i) => ({ id: i, file, status: 'queued' }));
     setUiState({ status: 'batch', entries: [...draft], isComplete: false });
 
     for (let i = 0; i < files.length; i++) {
       if (sessionRef.current !== session) return;
 
       const file = files[i];
-      draft[i] = { file, status: 'processing' };
+      draft[i] = { id: i, file, status: 'processing' };
       setUiState({ status: 'batch', entries: [...draft], isComplete: false });
 
       if (file.size > MAX_SIZE) {
-        draft[i] = { file, status: 'skipped', errorMessage: 'File too large (50 MB limit)' };
+        draft[i] = { id: i, file, status: 'skipped', errorMessage: 'File too large (50 MB limit)' };
         setUiState({ status: 'batch', entries: [...draft], isComplete: false });
         continue;
       }
@@ -294,7 +318,7 @@ export function DropZone({ isDark }: Props) {
       try {
         buffer = await readFileAsArrayBuffer(file);
       } catch {
-        draft[i] = { file, status: 'error', errorMessage: 'Failed to read file.' };
+        draft[i] = { id: i, file, status: 'error', errorMessage: 'Failed to read file.' };
         setUiState({ status: 'batch', entries: [...draft], isComplete: false });
         continue;
       }
@@ -303,12 +327,22 @@ export function DropZone({ isDark }: Props) {
 
       try {
         const result = stripMetadata(buffer);
-        const strippedBuffer = result.data.buffer as ArrayBuffer; // safe: strip functions return newly allocated Uint8Arrays
-        const blob = new Blob([strippedBuffer], { type: MIME[result.format] });
-        draft[i] = { file, status: 'done', result, blob, originalBuffer: buffer, strippedBuffer };
+        // slice() gives a fresh Uint8Array<ArrayBuffer> — correct byte range, no subarray ambiguity
+        const stripped = result.data.slice();
+        const blob = new Blob([stripped], { type: MIME[result.format] });
+        draft[i] = {
+          id: i,
+          file,
+          status: 'done',
+          result,
+          blob,
+          originalBuffer: buffer,
+          strippedBuffer: stripped.buffer,
+        };
       } catch (err) {
         const isUnsupported = err instanceof Error && err.message.startsWith('Unsupported format');
         draft[i] = {
+          id: i,
           file,
           status: 'error',
           errorMessage: isUnsupported
@@ -391,6 +425,8 @@ export function DropZone({ isDark }: Props) {
     uiState.status === 'batch' ? uiState.entries.findIndex((e) => e.status === 'processing') : -1;
   const batchSelected =
     uiState.status === 'batch' && selectedIndex !== null ? uiState.entries[selectedIndex] : null;
+  const batchDoneCount =
+    uiState.status === 'batch' ? uiState.entries.filter((e) => e.status === 'done').length : 0;
 
   return (
     <>
@@ -433,7 +469,7 @@ export function DropZone({ isDark }: Props) {
               Drop images here or click to select
             </div>
             <div className="text-[14px]" style={{ color: faint }}>
-              JPEG · PNG · WebP — up to 50 MB, 20 files max
+              JPEG · PNG · WebP · HEIC — up to 50 MB, 20 files max
             </div>
           </>
         )}
@@ -533,9 +569,11 @@ export function DropZone({ isDark }: Props) {
 
         {uiState.status === 'batch' && (
           <>
-            {!uiState.isComplete && batchProcessingIdx >= 0 && (
+            {!uiState.isComplete && (
               <div className="text-[14px] mb-3" style={{ color: muted }}>
-                Processing {batchProcessingIdx + 1} of {uiState.entries.length}...
+                {batchProcessingIdx >= 0
+                  ? `Processing ${batchProcessingIdx + 1} of ${uiState.entries.length}...`
+                  : `${batchDoneCount} of ${uiState.entries.length} processed`}
               </div>
             )}
             {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on file list interactions */}
@@ -544,10 +582,20 @@ export function DropZone({ isDark }: Props) {
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
+              {batchDoneCount >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => downloadAllAsZip(uiState.entries)}
+                  className="w-full text-[14px] font-bold tracking-[0.5px] text-white py-2 mb-3 cursor-pointer border-0"
+                  style={{ background: teal }}
+                >
+                  DOWNLOAD ALL ({batchDoneCount} FILES)
+                </button>
+              )}
               <div className="mb-2">
                 {uiState.entries.map((entry, i) => (
                   <FileRow
-                    key={`${entry.file.name}-${entry.file.size}-${entry.file.lastModified}`}
+                    key={entry.id}
                     entry={entry}
                     isDark={isDark}
                     isSelected={selectedIndex === i}
