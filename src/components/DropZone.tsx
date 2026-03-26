@@ -1,5 +1,5 @@
 import { zipSync } from 'fflate';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StripResult } from '../lib/strip';
 import { stripMetadata } from '../lib/strip';
 import { MetadataPanel } from './MetadataPanel';
@@ -43,6 +43,7 @@ function formatBytes(n: number): string {
 
 const MAX_SIZE = 50 * 1024 * 1024;
 const MAX_FILES = 20;
+let nextEntryId = 0;
 
 const MIME: Record<StripResult['format'], string> = {
   jpeg: 'image/jpeg',
@@ -236,9 +237,17 @@ export function DropZone({ isDark }: Props) {
   const [filterText, setFilterText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'unavailable'>('idle');
   const dragCount = useRef(0); // counter to avoid flicker when cursor moves over child elements
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionRef = useRef(0); // incremented on each new file/batch to cancel stale async work
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const teal = isDark ? '#00a3a3' : '#007070';
   const muted = isDark ? '#999999' : '#888888';
@@ -298,18 +307,23 @@ export function DropZone({ isDark }: Props) {
   }
 
   async function processBatch(files: File[], session: number): Promise<void> {
-    const draft: FileEntry[] = files.map((file, i) => ({ id: i, file, status: 'queued' }));
+    const draft: FileEntry[] = files.map((file) => ({ id: nextEntryId++, file, status: 'queued' }));
     setUiState({ status: 'batch', entries: [...draft], isComplete: false });
 
     for (let i = 0; i < files.length; i++) {
       if (sessionRef.current !== session) return;
 
       const file = files[i];
-      draft[i] = { id: i, file, status: 'processing' };
+      draft[i] = { id: draft[i].id, file, status: 'processing' };
       setUiState({ status: 'batch', entries: [...draft], isComplete: false });
 
       if (file.size > MAX_SIZE) {
-        draft[i] = { id: i, file, status: 'skipped', errorMessage: 'File too large (50 MB limit)' };
+        draft[i] = {
+          id: draft[i].id,
+          file,
+          status: 'skipped',
+          errorMessage: 'File too large (50 MB limit)',
+        };
         setUiState({ status: 'batch', entries: [...draft], isComplete: false });
         continue;
       }
@@ -318,7 +332,7 @@ export function DropZone({ isDark }: Props) {
       try {
         buffer = await readFileAsArrayBuffer(file);
       } catch {
-        draft[i] = { id: i, file, status: 'error', errorMessage: 'Failed to read file.' };
+        draft[i] = { id: draft[i].id, file, status: 'error', errorMessage: 'Failed to read file.' };
         setUiState({ status: 'batch', entries: [...draft], isComplete: false });
         continue;
       }
@@ -331,7 +345,7 @@ export function DropZone({ isDark }: Props) {
         const stripped = result.data.slice();
         const blob = new Blob([stripped], { type: MIME[result.format] });
         draft[i] = {
-          id: i,
+          id: draft[i].id,
           file,
           status: 'done',
           result,
@@ -342,7 +356,7 @@ export function DropZone({ isDark }: Props) {
       } catch (err) {
         const isUnsupported = err instanceof Error && err.message.startsWith('Unsupported format');
         draft[i] = {
-          id: i,
+          id: draft[i].id,
           file,
           status: 'error',
           errorMessage: isUnsupported
@@ -373,6 +387,8 @@ export function DropZone({ isDark }: Props) {
     sessionRef.current++;
     setFilterText('');
     setSelectedIndex(null);
+    if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    setCopyState('idle');
 
     if (files.length === 1) {
       handleSingleFile(files[0]);
@@ -403,8 +419,26 @@ export function DropZone({ isDark }: Props) {
     e.target.value = '';
   }
 
+  async function handleCopy() {
+    if (uiState.status !== 'done') return;
+    const session = sessionRef.current;
+    const mimeType = MIME[uiState.result.format];
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ [mimeType]: uiState.blob })]);
+      if (sessionRef.current !== session) return;
+      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+      setCopyState('copied');
+      copyTimerRef.current = setTimeout(() => setCopyState('idle'), 2000);
+    } catch {
+      if (sessionRef.current !== session) return;
+      setCopyState('unavailable');
+    }
+  }
+
   function handleReset(e: React.MouseEvent) {
     e.stopPropagation();
+    if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    setCopyState('idle');
     sessionRef.current++;
     setFilterText('');
     setSelectedIndex(null);
@@ -412,6 +446,11 @@ export function DropZone({ isDark }: Props) {
   }
 
   const isClickable = uiState.status === 'idle' || uiState.status === 'error';
+  const canCopy =
+    uiState.status === 'done' &&
+    uiState.result.format !== 'heic' &&
+    copyState !== 'unavailable' &&
+    typeof navigator.clipboard?.write === 'function';
   const borderColor = isDragging ? teal : isDark ? '#333333' : '#b0b0a8';
   const bgColor = isDragging
     ? isDark
@@ -542,17 +581,40 @@ export function DropZone({ isDark }: Props) {
                 isDark={isDark}
                 filterText={filterText}
               />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  triggerDownload(uiState.blob, `stripped-${uiState.file.name}`);
-                }}
-                className="w-full text-[16px] font-bold tracking-[0.5px] text-white py-2.5 mt-4 cursor-pointer border-0"
-                style={{ background: teal }}
-              >
-                DOWNLOAD CLEAN FILE
-              </button>
+              <div className="flex gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerDownload(uiState.blob, `stripped-${uiState.file.name}`);
+                  }}
+                  className="flex-1 text-[16px] font-bold tracking-[0.5px] text-white py-2.5 cursor-pointer border-0"
+                  style={{ background: teal }}
+                >
+                  DOWNLOAD CLEAN FILE
+                </button>
+                {canCopy && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleCopy();
+                    }}
+                    className="text-[14px] font-bold tracking-[0.5px] cursor-pointer"
+                    style={{
+                      color: teal,
+                      background: 'none',
+                      border: `1px solid ${teal}`,
+                      padding: '0 16px',
+                      flexShrink: 0,
+                      fontFamily: '"Courier New", Courier, monospace',
+                      minWidth: 90,
+                    }}
+                  >
+                    {copyState === 'copied' ? 'COPIED ✓' : 'COPY'}
+                  </button>
+                )}
+              </div>
               <div className="mt-3 text-center">
                 <button
                   type="button"
