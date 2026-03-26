@@ -49,6 +49,7 @@ const MIME: Record<StripResult['format'], string> = {
   png: 'image/png',
   webp: 'image/webp',
   heic: 'image/heic',
+  avif: 'image/avif',
 };
 
 function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
@@ -299,7 +300,7 @@ export function DropZone({ isDark }: Props) {
         setUiState({
           status: 'error',
           message: isUnsupported
-            ? `${file.name} is not a supported format. Supported: JPEG, PNG, WebP, HEIC.`
+            ? `${file.name} is not a supported format. Supported: JPEG, PNG, WebP, HEIC, AVIF.`
             : `Failed to process ${file.name}. The file may be corrupted.`,
         });
       }
@@ -364,7 +365,7 @@ export function DropZone({ isDark }: Props) {
           file,
           status: 'error',
           errorMessage: isUnsupported
-            ? 'Unsupported format. Supported: JPEG, PNG, WebP, HEIC.'
+            ? 'Unsupported format. Supported: JPEG, PNG, WebP, HEIC, AVIF.'
             : 'Failed to process file. The file may be corrupted.',
           originalBuffer: buffer, // retain so metadata preview works even on unsupported files
         };
@@ -496,7 +497,7 @@ export function DropZone({ isDark }: Props) {
         ref={inputRef}
         type="file"
         multiple
-        accept=".jpg,.jpeg,.png,.webp,.heic,.heif"
+        accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif"
         className="hidden"
         onChange={handleInputChange}
       />
@@ -531,7 +532,7 @@ export function DropZone({ isDark }: Props) {
               Drop images here or click to select
             </div>
             <div className="text-[14px]" style={{ color: faint }}>
-              JPEG · PNG · WebP · HEIC — up to 50 MB, 20 files max
+              JPEG · PNG · WebP · HEIC · AVIF — up to 50 MB, 20 files max
             </div>
           </>
         )}
@@ -724,7 +725,7 @@ export function DropZone({ isDark }: Props) {
         className="text-center text-[13px] mb-6"
         style={{ color: faint, fontFamily: '"Courier New", Courier, monospace' }}
       >
-        Supports JPEG · PNG · WebP · HEIC
+        Supports JPEG · PNG · WebP · HEIC · AVIF
       </div>
     </>
   );

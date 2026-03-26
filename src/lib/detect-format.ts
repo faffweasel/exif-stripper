@@ -1,6 +1,7 @@
-type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic';
+type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif';
 
-const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1']);
+const AVIF_BRANDS = new Set(['avif', 'avis']);
+const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis']);
 
 export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
   if (buffer.byteLength < 12) return null;
@@ -36,10 +37,24 @@ export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
   )
     return 'webp';
 
-  // HEIC/HEIF: ftyp box at bytes 4-7, brand at bytes 8-11
+  // HEIC/AVIF: ftyp box at bytes 4-7, major brand at bytes 8-11
   if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
     const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (AVIF_BRANDS.has(brand)) return 'avif';
     if (HEIC_BRANDS.has(brand)) return 'heic';
+    if (brand === 'mif1') {
+      // mif1 is shared by HEIC, AVIF, and other ISOBMFF formats; scan compatible brands to disambiguate
+      const ftypSize = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+      if (ftypSize >= 20 && buffer.byteLength >= ftypSize) {
+        const ftyp = new Uint8Array(buffer, 0, ftypSize);
+        for (let i = 16; i + 4 <= ftypSize; i += 4) {
+          const cb = String.fromCharCode(ftyp[i], ftyp[i + 1], ftyp[i + 2], ftyp[i + 3]);
+          if (AVIF_BRANDS.has(cb)) return 'avif';
+          if (HEIC_BRANDS.has(cb)) return 'heic';
+        }
+      }
+      return null; // mif1 without a recognised HEIC or AVIF compatible brand
+    }
   }
 
   return null;

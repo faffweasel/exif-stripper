@@ -417,11 +417,11 @@ function rebuildMeta(src: Uint8Array, b: RawBox, mdatAfterMeta: boolean): Uint8A
 
 export function stripHeic(buffer: ArrayBuffer): Uint8Array {
   const src = new Uint8Array(buffer);
-  if (src.length < 8) throw new Error('Not a valid HEIC: file too short');
+  if (src.length < 8) throw new Error('Not a valid ISOBMFF image: file too short');
 
   const topBoxes = scanBoxes(src, 0, src.length);
   if (!topBoxes.find((b) => b.type === 'ftyp'))
-    throw new Error('Not a valid HEIC: missing ftyp box');
+    throw new Error('Not a valid ISOBMFF image: missing ftyp box');
 
   const metaIdx = topBoxes.findIndex((b) => b.type === 'meta');
   const mdatIdx = topBoxes.findIndex((b) => b.type === 'mdat');
