@@ -1,0 +1,20 @@
+name: Licence Scan
+on: [push]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ScanCode
+        run: pip install scancode-toolkit
+
+      - name: Scan source
+        run: scancode --license --only-findings --json scan-results.json src/
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: licence-scan
+          path: scan-results.json
