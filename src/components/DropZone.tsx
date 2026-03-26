@@ -18,6 +18,8 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const MAX_SIZE = 50 * 1024 * 1024;
+
 const MIME: Record<StripResult['format'], string> = {
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -36,6 +38,10 @@ export function DropZone({ isDark }: Props) {
   const faint = isDark ? '#808080' : '#aaaaaa';
 
   function handleFile(file: File) {
+    if (file.size > MAX_SIZE) {
+      setUiState({ status: 'error', message: 'File too large. Maximum size is 50 MB.' });
+      return;
+    }
     setUiState({ status: 'processing' });
     const reader = new FileReader();
     reader.onload = () => {
@@ -45,9 +51,12 @@ export function DropZone({ isDark }: Props) {
         const blob = new Blob([result.data.buffer as ArrayBuffer], { type: MIME[result.format] });
         setUiState({ status: 'done', file, result, blob });
       } catch (err) {
+        const isUnsupported = err instanceof Error && err.message.startsWith('Unsupported format');
         setUiState({
           status: 'error',
-          message: err instanceof Error ? err.message : 'Failed to process image.',
+          message: isUnsupported
+            ? `${file.name} is not a supported format. Supported: JPEG, PNG, WebP, HEIC.`
+            : `Failed to process ${file.name}. The file may be corrupted.`,
         });
       }
     };
@@ -69,11 +78,13 @@ export function DropZone({ isDark }: Props) {
     e.preventDefault();
     dragCount.current = 0;
     setIsDragging(false);
+    setUiState({ status: 'idle' });
     const file = e.dataTransfer.files[0];
     if (file) handleFile(file);
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setUiState({ status: 'idle' });
     const file = e.target.files?.[0];
     if (file) handleFile(file);
     e.target.value = '';
@@ -240,6 +251,13 @@ export function DropZone({ isDark }: Props) {
             </div>
           </>
         )}
+      </div>
+
+      <div
+        className="text-center text-[13px] mb-6"
+        style={{ color: faint, fontFamily: '"Courier New", Courier, monospace' }}
+      >
+        Supports JPEG · PNG · WebP · HEIC
       </div>
     </>
   );
