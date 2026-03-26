@@ -8,3 +8,4 @@ dist/
 *.key
 CLAUDE.local.md
 .DS_Store
+scan-results.json

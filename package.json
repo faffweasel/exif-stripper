@@ -1,6 +1,5 @@
 {
   "name": "exif-stripper",
-  "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -30,5 +29,6 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1"
-  }
+  },
+  "license": "AGPL-3.0-only"
 }
