@@ -3,7 +3,9 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const REMOVE_CHUNKS = new Set(['tEXt', 'iTXt', 'zTXt', 'eXIf', 'tIME', 'dSIG']);
 
 function readUint32BE(src: Uint8Array, offset: number): number {
-  return ((src[offset] << 24) | (src[offset + 1] << 16) | (src[offset + 2] << 8) | src[offset + 3]) >>> 0;
+  return (
+    ((src[offset] << 24) | (src[offset + 1] << 16) | (src[offset + 2] << 8) | src[offset + 3]) >>> 0
+  );
 }
 
 export function stripPng(buffer: ArrayBuffer): Uint8Array {
@@ -24,7 +26,8 @@ export function stripPng(buffer: ArrayBuffer): Uint8Array {
     const dataLength = readUint32BE(src, pos);
     const chunkSize = dataLength + 12; // length(4) + type(4) + data + crc(4)
 
-    if (pos + chunkSize > src.length) throw new Error(`PNG chunk extends beyond end of file at offset ${pos}`);
+    if (pos + chunkSize > src.length)
+      throw new Error(`PNG chunk extends beyond end of file at offset ${pos}`);
 
     const type = String.fromCharCode(src[pos + 4], src[pos + 5], src[pos + 6], src[pos + 7]);
 

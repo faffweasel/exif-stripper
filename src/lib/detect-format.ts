@@ -37,12 +37,7 @@ export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
     return 'webp';
 
   // HEIC/HEIF: ftyp box at bytes 4-7, brand at bytes 8-11
-  if (
-    bytes[4] === 0x66 &&
-    bytes[5] === 0x74 &&
-    bytes[6] === 0x79 &&
-    bytes[7] === 0x70
-  ) {
+  if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
     const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
     if (HEIC_BRANDS.has(brand)) return 'heic';
   }

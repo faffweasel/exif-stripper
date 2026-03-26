@@ -47,28 +47,26 @@ export default function App() {
           </div>
 
           <button
-              type="button"
-              onClick={() => setIsDark((d) => !d)}
-              style={{
-                color: muted,
-                border: `1px solid ${border}`,
-                padding: '2px 6px',
-                fontSize: 14,
-                background: 'transparent',
-                cursor: 'pointer',
-                fontFamily: FONT,
-              }}
-            >
-              {isDark ? 'light' : 'dark'}
-            </button>
+            type="button"
+            onClick={() => setIsDark((d) => !d)}
+            style={{
+              color: muted,
+              border: `1px solid ${border}`,
+              padding: '2px 6px',
+              fontSize: 14,
+              background: 'transparent',
+              cursor: 'pointer',
+              fontFamily: FONT,
+            }}
+          >
+            {isDark ? 'light' : 'dark'}
+          </button>
         </div>
       </header>
 
       <main style={{ maxWidth: 720, margin: '0 auto', padding: '40px 24px 60px' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1
-            style={{ fontSize: 24, fontWeight: 'bold', margin: '0 0 8px 0', letterSpacing: 0.5 }}
-          >
+          <h1 style={{ fontSize: 24, fontWeight: 'bold', margin: '0 0 8px 0', letterSpacing: 0.5 }}>
             Strip metadata from your images
           </h1>
           <p style={{ fontSize: 16, color: muted, margin: 0, lineHeight: 1.6 }}>

@@ -27,21 +27,36 @@ function w16(b: Uint8Array, i: number, v: number): void {
 
 function readN(b: Uint8Array, i: number, n: number): number {
   switch (n) {
-    case 1: return b[i];
-    case 2: return r16(b, i);
-    case 4: return r32(b, i);
-    case 8: return r32(b, i) * 0x100000000 + r32(b, i + 4);
-    default: return 0;
+    case 1:
+      return b[i];
+    case 2:
+      return r16(b, i);
+    case 4:
+      return r32(b, i);
+    case 8:
+      return r32(b, i) * 0x100000000 + r32(b, i + 4);
+    default:
+      return 0;
   }
 }
 
 function writeN(b: Uint8Array, i: number, n: number, v: number): void {
   switch (n) {
-    case 1: b[i] = v & 0xff; break;
-    case 2: w16(b, i, v); break;
-    case 4: w32(b, i, v); break;
-    case 8: w32(b, i, Math.floor(v / 0x100000000)); w32(b, i + 4, v >>> 0); break;
-    default: break;
+    case 1:
+      b[i] = v & 0xff;
+      break;
+    case 2:
+      w16(b, i, v);
+      break;
+    case 4:
+      w32(b, i, v);
+      break;
+    case 8:
+      w32(b, i, Math.floor(v / 0x100000000));
+      w32(b, i + 4, v >>> 0);
+      break;
+    default:
+      break;
   }
 }
 
@@ -124,14 +139,20 @@ function parseInfe(src: Uint8Array, b: RawBox): InfeItem {
   let contentType: string;
 
   if (version < 2) {
-    itemId = r16(src, pos); pos += 2;
+    itemId = r16(src, pos);
+    pos += 2;
     pos += 2; // item_protection_index
     pos = asciiz(src, pos, end).next; // item_name (skip)
     contentType = asciiz(src, pos, end).str;
     itemType = '';
   } else {
-    if (version === 2) { itemId = r16(src, pos); pos += 2; }
-    else { itemId = r32(src, pos); pos += 4; }
+    if (version === 2) {
+      itemId = r16(src, pos);
+      pos += 2;
+    } else {
+      itemId = r32(src, pos);
+      pos += 4;
+    }
     pos += 2; // item_protection_index
     itemType = String.fromCharCode(src[pos], src[pos + 1], src[pos + 2], src[pos + 3]);
     pos += 4;
@@ -169,8 +190,11 @@ function rebuildIinf(src: Uint8Array, b: RawBox): { rebuilt: Uint8Array; removeI
   }
 
   const count = new Uint8Array(countSz);
-  if (version === 0) { w16(count, 0, kept.length); }
-  else { w32(count, 0, kept.length); }
+  if (version === 0) {
+    w16(count, 0, kept.length);
+  } else {
+    w32(count, 0, kept.length);
+  }
 
   return { rebuilt: buildBox('iinf', concat([fhdr, count, ...kept])), removeIds };
 }
@@ -206,7 +230,8 @@ function rebuildIloc(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8A
     pos += 2; // data_reference_index
     pos += baseOffsetSz;
 
-    const extentCount = r16(src, pos); pos += 2;
+    const extentCount = r16(src, pos);
+    pos += 2;
     for (let j = 0; j < extentCount; j++) {
       if (version >= 1 && indexSz > 0) pos += indexSz;
       pos += offsetSz;
@@ -217,8 +242,11 @@ function rebuildIloc(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8A
   }
 
   const count = new Uint8Array(countSz);
-  if (version < 2) { w16(count, 0, kept.length); }
-  else { w32(count, 0, kept.length); }
+  if (version < 2) {
+    w16(count, 0, kept.length);
+  } else {
+    w32(count, 0, kept.length);
+  }
 
   return buildBox('iloc', concat([fhdr, fieldSzBytes, count, ...kept]));
 }
@@ -304,7 +332,8 @@ function rebuildIref(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8A
 
     const fromId = idSz === 2 ? r16(src, inner) : r32(src, inner);
     inner += idSz;
-    const refCount = r16(src, inner); inner += 2;
+    const refCount = r16(src, inner);
+    inner += 2;
 
     if (!removeIds.has(fromId)) {
       const toIds: number[] = [];
@@ -321,11 +350,20 @@ function rebuildIref(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8A
           // rebuild with filtered to_item_IDs
           const payload = new Uint8Array(idSz + 2 + toIds.length * idSz);
           let p = 0;
-          if (idSz === 2) { w16(payload, p, fromId); } else { w32(payload, p, fromId); }
+          if (idSz === 2) {
+            w16(payload, p, fromId);
+          } else {
+            w32(payload, p, fromId);
+          }
           p += idSz;
-          w16(payload, p, toIds.length); p += 2;
+          w16(payload, p, toIds.length);
+          p += 2;
           for (const id of toIds) {
-            if (idSz === 2) { w16(payload, p, id); } else { w32(payload, p, id); }
+            if (idSz === 2) {
+              w16(payload, p, id);
+            } else {
+              w32(payload, p, id);
+            }
             p += idSz;
           }
           kept.push(buildBox(refType, payload));
@@ -346,13 +384,13 @@ function rebuildMeta(src: Uint8Array, b: RawBox, mdatAfterMeta: boolean): Uint8A
   const fhdr = src.subarray(start + 8, start + 12); // FullBox version + flags
   const children = scanBoxes(src, start + 12, start + size);
 
-  const iinf = children.find(c => c.type === 'iinf');
+  const iinf = children.find((c) => c.type === 'iinf');
   if (!iinf) return src.subarray(start, start + size);
 
   const { rebuilt: newIinf, removeIds } = rebuildIinf(src, iinf);
   if (removeIds.size === 0) return src.subarray(start, start + size);
 
-  const newChildren = children.map(c => {
+  const newChildren = children.map((c) => {
     if (c.type === 'iinf') return newIinf;
     if (c.type === 'iloc') return rebuildIloc(src, c, removeIds);
     if (c.type === 'iref') return rebuildIref(src, c, removeIds);
@@ -365,7 +403,7 @@ function rebuildMeta(src: Uint8Array, b: RawBox, mdatAfterMeta: boolean): Uint8A
     const newMetaSize = 8 + 4 + newChildren.reduce((s, c) => s + c.length, 0);
     const delta = size - newMetaSize;
     if (delta > 0) {
-      const ilocIdx = children.findIndex(c => c.type === 'iloc');
+      const ilocIdx = children.findIndex((c) => c.type === 'iloc');
       if (ilocIdx !== -1) {
         newChildren[ilocIdx] = adjustIlocOffsets(newChildren[ilocIdx], delta);
       }
@@ -382,15 +420,18 @@ export function stripHeic(buffer: ArrayBuffer): Uint8Array {
   if (src.length < 8) throw new Error('Not a valid HEIC: file too short');
 
   const topBoxes = scanBoxes(src, 0, src.length);
-  if (!topBoxes.find(b => b.type === 'ftyp')) throw new Error('Not a valid HEIC: missing ftyp box');
+  if (!topBoxes.find((b) => b.type === 'ftyp'))
+    throw new Error('Not a valid HEIC: missing ftyp box');
 
-  const metaIdx = topBoxes.findIndex(b => b.type === 'meta');
-  const mdatIdx = topBoxes.findIndex(b => b.type === 'mdat');
+  const metaIdx = topBoxes.findIndex((b) => b.type === 'meta');
+  const mdatIdx = topBoxes.findIndex((b) => b.type === 'mdat');
   const mdatAfterMeta = metaIdx !== -1 && mdatIdx !== -1 && mdatIdx > metaIdx;
 
   return concat(
-    topBoxes.map(b =>
-      b.type === 'meta' ? rebuildMeta(src, b, mdatAfterMeta) : src.subarray(b.start, b.start + b.size),
-    ),
+    topBoxes.map((b) =>
+      b.type === 'meta'
+        ? rebuildMeta(src, b, mdatAfterMeta)
+        : src.subarray(b.start, b.start + b.size)
+    )
   );
 }

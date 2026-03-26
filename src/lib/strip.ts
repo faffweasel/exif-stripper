@@ -1,8 +1,8 @@
 import { detectFormat } from './detect-format';
+import { stripHeic } from './strip-heic';
 import { stripJpeg } from './strip-jpeg';
 import { stripPng } from './strip-png';
 import { stripWebp } from './strip-webp';
-import { stripHeic } from './strip-heic';
 
 export interface StripResult {
   data: Uint8Array;

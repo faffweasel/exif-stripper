@@ -1,7 +1,9 @@
 const REMOVE_CHUNKS = new Set(['EXIF', 'XMP ', 'XMP\x00']);
 
 function readUint32LE(src: Uint8Array, offset: number): number {
-  return (src[offset] | (src[offset + 1] << 8) | (src[offset + 2] << 16) | (src[offset + 3] << 24)) >>> 0;
+  return (
+    (src[offset] | (src[offset + 1] << 8) | (src[offset + 2] << 16) | (src[offset + 3] << 24)) >>> 0
+  );
 }
 
 function writeUint32LE(dst: Uint8Array, offset: number, value: number): void {
