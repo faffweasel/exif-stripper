@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { stripMetadata } from '../lib/strip';
 import type { StripResult } from '../lib/strip';
+import { stripMetadata } from '../lib/strip';
 
 interface Props {
   readonly isDark: boolean;
@@ -92,10 +92,14 @@ export function DropZone({ isDark }: Props) {
 
   const isClickable = uiState.status !== 'processing';
 
-  const borderColor = isDragging ? teal : (isDark ? '#333333' : '#b0b0a8');
+  const borderColor = isDragging ? teal : isDark ? '#333333' : '#b0b0a8';
   const bgColor = isDragging
-    ? (isDark ? 'rgba(0,128,128,0.05)' : 'rgba(0,112,112,0.03)')
-    : (isDark ? '#1a1a1a' : '#ffffff');
+    ? isDark
+      ? 'rgba(0,128,128,0.05)'
+      : 'rgba(0,112,112,0.03)'
+    : isDark
+      ? '#1a1a1a'
+      : '#ffffff';
 
   return (
     <>
@@ -109,13 +113,14 @@ export function DropZone({ isDark }: Props) {
 
       <div
         onClick={() => isClickable && inputRef.current?.click()}
-        onKeyDown={(e) => e.key === 'Enter' && isClickable && inputRef.current?.click()}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && isClickable && inputRef.current?.click()}
         onDragOver={(e) => e.preventDefault()}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        role={isClickable ? 'button' : undefined}
-        tabIndex={isClickable ? 0 : undefined}
+        role="button"
+        tabIndex={0}
+        aria-label="Select files to strip metadata"
         style={{
           border: `2px dashed ${borderColor}`,
           background: bgColor,
@@ -126,7 +131,9 @@ export function DropZone({ isDark }: Props) {
       >
         {uiState.status === 'idle' && (
           <>
-            <div className="text-[32px] mb-2.5" style={{ opacity: 0.4, color: muted }}>+</div>
+            <div className="text-[32px] mb-2.5" style={{ opacity: 0.4, color: muted }}>
+              +
+            </div>
             <div className="text-[16px] mb-1" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
               Drop images here or click to select
             </div>
@@ -137,7 +144,9 @@ export function DropZone({ isDark }: Props) {
         )}
 
         {uiState.status === 'processing' && (
-          <div className="text-[16px]" style={{ color: muted }}>Processing...</div>
+          <div className="text-[16px]" style={{ color: muted }}>
+            Processing...
+          </div>
         )}
 
         {uiState.status === 'error' && (
@@ -145,15 +154,16 @@ export function DropZone({ isDark }: Props) {
             <div className="text-[16px] mb-3" style={{ color: isDark ? '#c66666' : '#a44444' }}>
               {uiState.message}
             </div>
-            <div className="text-[14px]" style={{ color: faint }}>Click to try another file</div>
+            <div className="text-[14px]" style={{ color: faint }}>
+              Click to try another file
+            </div>
           </>
         )}
 
         {uiState.status === 'done' && (
           <>
             <div className="text-[16px] mb-4" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
-              <span style={{ color: teal }}>✓</span>{' '}
-              {uiState.file.name}
+              <span style={{ color: teal }}>✓</span> {uiState.file.name}
               <span style={{ color: muted }}> ({formatBytes(uiState.file.size)})</span>
             </div>
 
@@ -218,7 +228,10 @@ export function DropZone({ isDark }: Props) {
             <div className="mt-3">
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setUiState({ status: 'idle' }); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setUiState({ status: 'idle' });
+                }}
                 className="text-[14px] cursor-pointer border-0 bg-transparent underline"
                 style={{ color: teal }}
               >
