@@ -42,7 +42,7 @@ export function DropZone({ isDark }: Props) {
       try {
         const buffer = reader.result as ArrayBuffer; // safe: readAsArrayBuffer guarantees ArrayBuffer
         const result = stripMetadata(buffer);
-        const blob = new Blob([result.data], { type: MIME[result.format] });
+        const blob = new Blob([result.data.buffer as ArrayBuffer], { type: MIME[result.format] });
         setUiState({ status: 'done', file, result, blob });
       } catch (err) {
         setUiState({

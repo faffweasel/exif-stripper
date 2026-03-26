@@ -178,7 +178,7 @@ function rebuildIinf(src: Uint8Array, b: RawBox): { rebuilt: Uint8Array; removeI
 // --- iloc (item location box) ---
 
 function rebuildIloc(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8Array {
-  const { start, size } = b;
+  const { start } = b;
   const version = src[start + 8];
   const fhdr = src.subarray(start + 8, start + 12); // version + flags
   let pos = start + 12;
