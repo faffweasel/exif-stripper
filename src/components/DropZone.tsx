@@ -43,7 +43,6 @@ function formatBytes(n: number): string {
 
 const MAX_SIZE = 50 * 1024 * 1024;
 const MAX_FILES = 20;
-let nextEntryId = 0;
 
 const MIME: Record<StripResult['format'], string> = {
   jpeg: 'image/jpeg',
@@ -140,7 +139,7 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
       </span>
       {entry.status === 'done' && entry.result && (
         <span style={{ color: muted, flexShrink: 0, fontSize: 12 }}>
-          {formatBytes(entry.result.originalSize)} → {formatBytes(entry.result.strippedSize)}
+          {entry.result.format.toUpperCase()}
         </span>
       )}
       {entry.status === 'processing' && (
@@ -242,6 +241,7 @@ export function DropZone({ isDark }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const sessionRef = useRef(0); // incremented on each new file/batch to cancel stale async work
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextEntryIdRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -307,7 +307,11 @@ export function DropZone({ isDark }: Props) {
   }
 
   async function processBatch(files: File[], session: number): Promise<void> {
-    const draft: FileEntry[] = files.map((file) => ({ id: nextEntryId++, file, status: 'queued' }));
+    const draft: FileEntry[] = files.map((file) => ({
+      id: nextEntryIdRef.current++,
+      file,
+      status: 'queued',
+    }));
     setUiState({ status: 'batch', entries: [...draft], isComplete: false });
 
     for (let i = 0; i < files.length; i++) {
@@ -387,7 +391,10 @@ export function DropZone({ isDark }: Props) {
     sessionRef.current++;
     setFilterText('');
     setSelectedIndex(null);
-    if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    if (copyTimerRef.current !== null) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
     setCopyState('idle');
 
     if (files.length === 1) {
@@ -426,9 +433,15 @@ export function DropZone({ isDark }: Props) {
     try {
       await navigator.clipboard.write([new ClipboardItem({ [mimeType]: uiState.blob })]);
       if (sessionRef.current !== session) return;
-      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
       setCopyState('copied');
-      copyTimerRef.current = setTimeout(() => setCopyState('idle'), 2000);
+      copyTimerRef.current = setTimeout(() => {
+        setCopyState('idle');
+        copyTimerRef.current = null;
+      }, 2000);
     } catch {
       if (sessionRef.current !== session) return;
       setCopyState('unavailable');
@@ -437,7 +450,10 @@ export function DropZone({ isDark }: Props) {
 
   function handleReset(e: React.MouseEvent) {
     e.stopPropagation();
-    if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    if (copyTimerRef.current !== null) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
     setCopyState('idle');
     sessionRef.current++;
     setFilterText('');
@@ -446,11 +462,18 @@ export function DropZone({ isDark }: Props) {
   }
 
   const isClickable = uiState.status === 'idle' || uiState.status === 'error';
-  const canCopy =
-    uiState.status === 'done' &&
-    uiState.result.format !== 'heic' &&
-    copyState !== 'unavailable' &&
-    typeof navigator.clipboard?.write === 'function';
+  // ClipboardItem.supports() gives accurate per-MIME runtime support (PNG mandated by spec, others browser-dependent).
+  // Wrapped in try/catch: pre-M121 Chromium shipped supports() as throwing for unknown types rather than returning false.
+  // Falls back to hiding the button in browsers where supports() is absent or misbehaves.
+  const canCopy = (() => {
+    if (uiState.status !== 'done' || copyState === 'unavailable') return false;
+    if (typeof ClipboardItem?.supports !== 'function') return false;
+    try {
+      return ClipboardItem.supports(MIME[uiState.result.format]);
+    } catch {
+      return false;
+    }
+  })();
   const borderColor = isDragging ? teal : isDark ? '#333333' : '#b0b0a8';
   const bgColor = isDragging
     ? isDark
