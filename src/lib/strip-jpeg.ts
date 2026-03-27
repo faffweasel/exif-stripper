@@ -50,6 +50,7 @@ export function stripJpeg(buffer: ArrayBuffer): Uint8Array {
     if (pos + 1 >= src.length) throw new Error('Truncated JPEG marker length');
     const length = (src[pos] << 8) | src[pos + 1]; // includes the 2 length bytes
     const segmentEnd = pos - 1 + length + 1; // pos-1 is marker byte, length covers itself + payload
+    if (segmentEnd > src.length) throw new Error(`Truncated JPEG segment at offset ${markerStart}`);
 
     if (marker === 0xda) {
       // SOS: keep header segment, then copy entropy-coded data verbatim to EOI

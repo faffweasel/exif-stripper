@@ -1,5 +1,6 @@
 import { zipSync } from 'fflate';
 import { useEffect, useRef, useState } from 'react';
+import { detectFormat } from '../lib/detect-format';
 import type { StripResult } from '../lib/strip';
 import { stripMetadata } from '../lib/strip';
 import { MetadataPanel } from './MetadataPanel';
@@ -41,8 +42,19 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const MAX_SIZE = 50 * 1024 * 1024;
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 500 * 1024 * 1024;
 const MAX_FILES = 20;
+const VIDEO_FORMATS = new Set(['mp4', 'mov']);
+
+function maxSizeForBuffer(buffer: ArrayBuffer): number {
+  const fmt = detectFormat(buffer);
+  return fmt !== null && VIDEO_FORMATS.has(fmt) ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+}
+
+function maxSizeLabel(isVideo: boolean): string {
+  return isVideo ? '500 MB' : '50 MB';
+}
 
 const MIME: Record<StripResult['format'], string> = {
   jpeg: 'image/jpeg',
@@ -258,8 +270,9 @@ export function DropZone({ isDark }: Props) {
   const faint = isDark ? '#808080' : '#aaaaaa';
 
   function handleSingleFile(file: File) {
-    if (file.size > MAX_SIZE) {
-      setUiState({ status: 'error', message: 'File too large. Maximum size is 50 MB.' });
+    // Reject files over the video limit upfront (format-specific limit checked after reading)
+    if (file.size > MAX_VIDEO_SIZE) {
+      setUiState({ status: 'error', message: 'File too large. Maximum size is 500 MB.' });
       return;
     }
     const session = sessionRef.current;
@@ -268,6 +281,15 @@ export function DropZone({ isDark }: Props) {
     reader.onload = () => {
       if (sessionRef.current !== session) return;
       const buffer = reader.result as ArrayBuffer; // safe: readAsArrayBuffer always returns ArrayBuffer
+      const limit = maxSizeForBuffer(buffer);
+      if (file.size > limit) {
+        const isVideo = limit === MAX_VIDEO_SIZE;
+        setUiState({
+          status: 'error',
+          message: `File too large. Maximum size for ${isVideo ? 'video' : 'images'} is ${maxSizeLabel(isVideo)}.`,
+        });
+        return;
+      }
       setUiState({ status: 'preview', file, originalBuffer: buffer });
     };
     reader.onerror = () => {
@@ -303,7 +325,7 @@ export function DropZone({ isDark }: Props) {
         setUiState({
           status: 'error',
           message: isUnsupported
-            ? `${file.name} is not a supported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF.`
+            ? `${file.name} is not a supported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF, MP4, MOV.`
             : `Failed to process ${file.name}. The file may be corrupted.`,
         });
       }
@@ -325,12 +347,12 @@ export function DropZone({ isDark }: Props) {
       draft[i] = { id: draft[i].id, file, status: 'processing' };
       setUiState({ status: 'batch', entries: [...draft], isComplete: false });
 
-      if (file.size > MAX_SIZE) {
+      if (file.size > MAX_VIDEO_SIZE) {
         draft[i] = {
           id: draft[i].id,
           file,
           status: 'skipped',
-          errorMessage: 'File too large (50 MB limit)',
+          errorMessage: 'File too large (500 MB limit)',
         };
         setUiState({ status: 'batch', entries: [...draft], isComplete: false });
         continue;
@@ -346,6 +368,20 @@ export function DropZone({ isDark }: Props) {
       }
 
       if (sessionRef.current !== session) return;
+
+      const limit = maxSizeForBuffer(buffer);
+      if (file.size > limit) {
+        const isVideo = limit === MAX_VIDEO_SIZE;
+        draft[i] = {
+          id: draft[i].id,
+          file,
+          status: 'skipped',
+          errorMessage: `File too large (${maxSizeLabel(isVideo)} limit)`,
+          originalBuffer: buffer,
+        };
+        setUiState({ status: 'batch', entries: [...draft], isComplete: false });
+        continue;
+      }
 
       try {
         const result = stripMetadata(buffer);
@@ -368,7 +404,7 @@ export function DropZone({ isDark }: Props) {
           file,
           status: 'error',
           errorMessage: isUnsupported
-            ? 'Unsupported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF.'
+            ? 'Unsupported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF, MP4, MOV.'
             : 'Failed to process file. The file may be corrupted.',
           originalBuffer: buffer, // retain so metadata preview works even on unsupported files
         };
@@ -500,7 +536,7 @@ export function DropZone({ isDark }: Props) {
         ref={inputRef}
         type="file"
         multiple
-        accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.gif"
+        accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.gif,.mp4,.mov,.m4v"
         className="hidden"
         onChange={handleInputChange}
       />
@@ -532,10 +568,10 @@ export function DropZone({ isDark }: Props) {
               +
             </div>
             <div className="text-[16px] mb-1" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
-              Drop images here or click to select
+              Drop files here or click to select
             </div>
             <div className="text-[14px]" style={{ color: faint }}>
-              JPEG · PNG · WebP · HEIC · AVIF · GIF — up to 50 MB, 20 files max
+              JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV — 20 files max
             </div>
           </>
         )}
@@ -575,6 +611,7 @@ export function DropZone({ isDark }: Props) {
                 fileName={uiState.file.name}
                 isDark={isDark}
                 filterText={filterText}
+                format={detectFormat(uiState.originalBuffer) ?? undefined}
               />
               <button
                 type="button"
@@ -607,6 +644,7 @@ export function DropZone({ isDark }: Props) {
                 fileName={uiState.file.name}
                 isDark={isDark}
                 filterText={filterText}
+                format={uiState.result.format}
               />
               <div className="flex gap-2 mt-4">
                 <button
@@ -704,6 +742,11 @@ export function DropZone({ isDark }: Props) {
                     fileName={batchSelected.file.name}
                     isDark={isDark}
                     filterText={filterText}
+                    format={
+                      batchSelected.result?.format ??
+                      detectFormat(batchSelected.originalBuffer) ??
+                      undefined
+                    }
                   />
                 </div>
               )}
@@ -728,7 +771,7 @@ export function DropZone({ isDark }: Props) {
         className="text-center text-[13px] mb-6"
         style={{ color: faint, fontFamily: '"Courier New", Courier, monospace' }}
       >
-        Supports JPEG · PNG · WebP · HEIC · AVIF · GIF
+        Supports JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV
       </div>
     </>
   );

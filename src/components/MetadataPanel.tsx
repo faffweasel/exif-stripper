@@ -8,6 +8,7 @@ interface Props {
   readonly fileName: string;
   readonly isDark: boolean;
   readonly filterText?: string;
+  readonly format?: string;
 }
 
 type Category =
@@ -185,7 +186,15 @@ function Section({
   );
 }
 
-export function MetadataPanel({ originalBuffer, strippedBuffer, isDark, filterText = '' }: Props) {
+const VIDEO_FORMATS = new Set(['mp4', 'mov']);
+
+export function MetadataPanel({
+  originalBuffer,
+  strippedBuffer,
+  isDark,
+  filterText = '',
+  format,
+}: Props) {
   const grouped = useMemo(() => parseGroups(originalBuffer), [originalBuffer]);
   const teal = isDark ? '#008080' : '#007070';
   const faint = isDark ? '#808080' : '#aaaaaa';
@@ -194,11 +203,11 @@ export function MetadataPanel({ originalBuffer, strippedBuffer, isDark, filterTe
   const mono: CSSProperties = { fontFamily: '"Courier New", Courier, monospace' };
 
   if (grouped === null) {
-    return (
-      <div style={{ ...mono, color: faint, fontSize: 14, padding: '12px 0' }}>
-        Metadata preview unavailable
-      </div>
-    );
+    const message =
+      format !== undefined && VIDEO_FORMATS.has(format)
+        ? 'Metadata preview not available for video files'
+        : 'Metadata preview unavailable';
+    return <div style={{ ...mono, color: faint, fontSize: 14, padding: '12px 0' }}>{message}</div>;
   }
 
   const needle = filterText.toLowerCase();
