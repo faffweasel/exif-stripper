@@ -31,6 +31,7 @@ export function stripJpeg(buffer: ArrayBuffer): Uint8Array {
   while (pos < src.length) {
     if (src[pos] !== 0xff) throw new Error(`Expected marker at offset ${pos}`);
 
+    const markerStart = pos; // start of this marker, including any 0xFF padding prefix bytes
     // Skip padding 0xFF bytes
     while (pos < src.length && src[pos] === 0xff) pos++;
     if (pos >= src.length) break;
@@ -38,10 +39,9 @@ export function stripJpeg(buffer: ArrayBuffer): Uint8Array {
     const marker = src[pos++];
 
     if (NO_LENGTH_MARKERS.has(marker)) {
-      // SOI or RST: 2-byte marker, no length
-      const start = pos - 2;
-      kept.push([start, pos]);
-      totalSize += 2;
+      // SOI, EOI, RST: variable-length 0xFF run + marker byte, no length field
+      kept.push([markerStart, pos]);
+      totalSize += pos - markerStart;
 
       if (marker === 0xd9) break; // EOI — done
       continue;
@@ -53,16 +53,13 @@ export function stripJpeg(buffer: ArrayBuffer): Uint8Array {
 
     if (marker === 0xda) {
       // SOS: keep header segment, then copy entropy-coded data verbatim to EOI
-      if (!REMOVE_MARKERS.has(marker)) {
-        const segStart = pos - 2;
-        kept.push([segStart, segmentEnd]);
-        totalSize += segmentEnd - segStart;
-      }
+      kept.push([markerStart, segmentEnd]);
+      totalSize += segmentEnd - markerStart;
 
       // Find EOI (FF D9), skipping FF 00 (stuffing) and FF D0–D7 (RST markers in scan data)
       let scanPos = segmentEnd;
-      while (scanPos < src.length - 1) {
-        if (src[scanPos] === 0xff) {
+      while (scanPos < src.length) {
+        if (src[scanPos] === 0xff && scanPos + 1 < src.length) {
           const next = src[scanPos + 1];
           if (next !== 0x00 && (next < 0xd0 || next > 0xd7)) break;
         }
@@ -80,9 +77,8 @@ export function stripJpeg(buffer: ArrayBuffer): Uint8Array {
     }
 
     if (!REMOVE_MARKERS.has(marker)) {
-      const start = pos - 2;
-      kept.push([start, segmentEnd]);
-      totalSize += segmentEnd - start;
+      kept.push([markerStart, segmentEnd]);
+      totalSize += segmentEnd - markerStart;
     }
 
     pos = segmentEnd;
