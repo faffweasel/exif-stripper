@@ -1,4 +1,4 @@
-type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif';
+type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif';
 
 const AVIF_BRANDS = new Set(['avif', 'avis']);
 const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis']);
@@ -7,6 +7,17 @@ export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
   if (buffer.byteLength < 12) return null;
 
   const bytes = new Uint8Array(buffer, 0, 12);
+
+  // GIF: GIF87a (47 49 46 38 37 61) or GIF89a (47 49 46 38 39 61)
+  if (
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+    bytes[5] === 0x61
+  )
+    return 'gif';
 
   // JPEG: FF D8 FF
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
