@@ -1,7 +1,23 @@
-export type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif';
+export type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif' | 'mp4' | 'mov';
 
 const AVIF_BRANDS = new Set(['avif', 'avis']);
 const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis']);
+const MP4_BRANDS = new Set([
+  'isom',
+  'iso2',
+  'iso3',
+  'iso4',
+  'iso5',
+  'iso6',
+  'mp41',
+  'mp42',
+  'M4V ',
+  'M4A ',
+  'f4v ',
+  'dash',
+  'avc1',
+]);
+const MOV_BRANDS = new Set(['qt  ']);
 
 export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
   if (buffer.byteLength < 12) return null;
@@ -48,7 +64,8 @@ export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
   )
     return 'webp';
 
-  // HEIC/AVIF: ftyp box at bytes 4-7, major brand at bytes 8-11
+  // ISOBMFF: ftyp box at bytes 4-7, major brand at bytes 8-11
+  // Check HEIC/AVIF before MP4/MOV — some files use shared brands (e.g. mif1)
   if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
     const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
     if (AVIF_BRANDS.has(brand)) return 'avif';
@@ -66,6 +83,8 @@ export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
       }
       return null; // mif1 without a recognised HEIC or AVIF compatible brand
     }
+    if (MP4_BRANDS.has(brand)) return 'mp4';
+    if (MOV_BRANDS.has(brand)) return 'mov';
   }
 
   return null;

@@ -18,6 +18,12 @@ export function stripMetadata(buffer: ArrayBuffer): StripResult {
     throw new Error('Unsupported format. Supported formats: JPEG, PNG, WebP, HEIC, AVIF, GIF.');
   }
 
+  if (format === 'mp4' || format === 'mov') {
+    throw new Error(
+      `Unsupported format. ${format.toUpperCase()} metadata stripping is not yet supported.`
+    );
+  }
+
   // avif uses the same ISOBMFF container as heic — identical stripping logic
   const strippers = {
     jpeg: stripJpeg,

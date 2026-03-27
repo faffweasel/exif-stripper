@@ -51,6 +51,8 @@ const MIME: Record<StripResult['format'], string> = {
   heic: 'image/heic',
   avif: 'image/avif',
   gif: 'image/gif',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
 };
 
 function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
