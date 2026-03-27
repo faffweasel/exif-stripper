@@ -1,4 +1,4 @@
-import { detectFormat } from './detect-format';
+import { detectFormat, type ImageFormat } from './detect-format';
 import { stripGif } from './strip-gif';
 import { stripHeic } from './strip-heic';
 import { stripJpeg } from './strip-jpeg';
@@ -7,7 +7,7 @@ import { stripWebp } from './strip-webp';
 
 export interface StripResult {
   data: Uint8Array;
-  format: 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif';
+  format: ImageFormat;
   originalSize: number;
   strippedSize: number;
 }

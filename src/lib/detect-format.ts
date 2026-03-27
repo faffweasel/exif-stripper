@@ -1,4 +1,4 @@
-type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif';
+export type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif';
 
 const AVIF_BRANDS = new Set(['avif', 'avis']);
 const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis']);

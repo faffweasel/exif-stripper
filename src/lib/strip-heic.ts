@@ -63,7 +63,8 @@ function writeN(b: Uint8Array, i: number, n: number, v: number): void {
 function asciiz(b: Uint8Array, pos: number, end: number): { str: string; next: number } {
   let str = '';
   while (pos < end && b[pos] !== 0) str += String.fromCharCode(b[pos++]);
-  return { str, next: pos + 1 };
+  // If null terminator found at pos, advance past it; if not found (pos === end), clamp to end
+  return { str, next: pos < end ? pos + 1 : end };
 }
 
 function concat(parts: Uint8Array[]): Uint8Array {
@@ -326,8 +327,10 @@ function rebuildIref(src: Uint8Array, b: RawBox, removeIds: Set<ItemId>): Uint8A
 
   while (pos + 8 <= end) {
     const refSize = r32(src, pos);
-    const refType = String.fromCharCode(src[pos + 4], src[pos + 5], src[pos + 6], src[pos + 7]);
     const refEnd = pos + refSize;
+    if (refSize < 8 || refEnd > end)
+      throw new Error(`Not a valid ISOBMFF container: malformed iref entry at offset ${pos}`);
+    const refType = String.fromCharCode(src[pos + 4], src[pos + 5], src[pos + 6], src[pos + 7]);
     let inner = pos + 8;
 
     const fromId = idSz === 2 ? r16(src, inner) : r32(src, inner);
@@ -417,11 +420,11 @@ function rebuildMeta(src: Uint8Array, b: RawBox, mdatAfterMeta: boolean): Uint8A
 
 export function stripHeic(buffer: ArrayBuffer): Uint8Array {
   const src = new Uint8Array(buffer);
-  if (src.length < 8) throw new Error('Not a valid ISOBMFF image: file too short');
+  if (src.length < 8) throw new Error('Not a valid ISOBMFF container: file too short');
 
   const topBoxes = scanBoxes(src, 0, src.length);
   if (!topBoxes.find((b) => b.type === 'ftyp'))
-    throw new Error('Not a valid ISOBMFF image: missing ftyp box');
+    throw new Error('Not a valid ISOBMFF container: missing ftyp box');
 
   const metaIdx = topBoxes.findIndex((b) => b.type === 'meta');
   const mdatIdx = topBoxes.findIndex((b) => b.type === 'mdat');
