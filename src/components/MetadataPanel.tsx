@@ -6,7 +6,6 @@ interface Props {
   readonly originalBuffer: ArrayBuffer;
   readonly strippedBuffer?: ArrayBuffer;
   readonly fileName: string;
-  readonly isDark: boolean;
   readonly filterText?: string;
   readonly format?: string;
 }
@@ -119,33 +118,31 @@ const STRUCTURAL_SUBTITLE =
 function Section({
   category,
   tags,
-  isDark,
   isStripped,
   isStructural = false,
 }: {
   readonly category: Category;
   readonly tags: readonly TagEntry[];
-  readonly isDark: boolean;
   readonly isStripped: boolean;
   readonly isStructural?: boolean;
 }) {
   const [expanded, setExpanded] = useState(DEFAULT_EXPANDED.has(category));
-  const text = isDark ? '#c8c8c0' : '#1a1a1a';
-  const muted = isDark ? '#999999' : '#888888';
-  const faint = isDark ? '#808080' : '#aaaaaa';
-  const border = isDark ? '#2a2a2a' : '#c8c8c0';
   const applyStrikethrough = isStripped && !isStructural;
 
   return (
-    <div style={{ borderBottom: `1px solid ${border}` }}>
+    <div style={{ borderBottom: '1px solid var(--border)' }}>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="w-full flex justify-between items-center py-1.5 bg-transparent border-0 cursor-pointer text-left"
-        style={{ fontFamily: '"Courier New", Courier, monospace', color: text, fontSize: 14 }}
+        style={{
+          fontFamily: '"Courier New", Courier, monospace',
+          color: 'var(--text)',
+          fontSize: 14,
+        }}
       >
         <span className="font-bold tracking-[0.5px] uppercase">{category}</span>
-        <span style={{ color: muted }}>
+        <span style={{ color: 'var(--muted)' }}>
           {tags.length} {tags.length === 1 ? 'tag' : 'tags'}&nbsp;{expanded ? '▲' : '▼'}
         </span>
       </button>
@@ -154,7 +151,7 @@ function Section({
           style={{
             fontFamily: '"Courier New", Courier, monospace',
             fontSize: 12,
-            color: faint,
+            color: 'var(--faint)',
             paddingBottom: 6,
           }}
         >
@@ -176,8 +173,10 @@ function Section({
                 fontSize: 14,
               }}
             >
-              <span style={{ color: muted }}>{name}</span>
-              <span style={{ color: text, overflowWrap: 'break-word', minWidth: 0 }}>{value}</span>
+              <span style={{ color: 'var(--muted)' }}>{name}</span>
+              <span style={{ color: 'var(--text)', overflowWrap: 'break-word', minWidth: 0 }}>
+                {value}
+              </span>
             </div>
           ))}
         </div>
@@ -188,16 +187,8 @@ function Section({
 
 const VIDEO_FORMATS = new Set(['mp4', 'mov']);
 
-export function MetadataPanel({
-  originalBuffer,
-  strippedBuffer,
-  isDark,
-  filterText = '',
-  format,
-}: Props) {
+export function MetadataPanel({ originalBuffer, strippedBuffer, filterText = '', format }: Props) {
   const grouped = useMemo(() => parseGroups(originalBuffer), [originalBuffer]);
-  const teal = isDark ? '#008080' : '#007070';
-  const faint = isDark ? '#808080' : '#aaaaaa';
   const isStripped = strippedBuffer !== undefined;
 
   const mono: CSSProperties = { fontFamily: '"Courier New", Courier, monospace' };
@@ -207,7 +198,11 @@ export function MetadataPanel({
       format !== undefined && VIDEO_FORMATS.has(format)
         ? 'Metadata preview not available for video files'
         : 'Metadata preview unavailable';
-    return <div style={{ ...mono, color: faint, fontSize: 14, padding: '12px 0' }}>{message}</div>;
+    return (
+      <div style={{ ...mono, color: 'var(--faint)', fontSize: 14, padding: '12px 0' }}>
+        {message}
+      </div>
+    );
   }
 
   const needle = filterText.toLowerCase();
@@ -218,7 +213,7 @@ export function MetadataPanel({
 
   if (sections.length === 0) {
     return (
-      <div style={{ ...mono, color: faint, fontSize: 14, padding: '12px 0' }}>
+      <div style={{ ...mono, color: 'var(--faint)', fontSize: 14, padding: '12px 0' }}>
         {needle ? 'No tags match filter' : 'No metadata detected'}
       </div>
     );
@@ -231,14 +226,17 @@ export function MetadataPanel({
           key={category}
           category={category}
           tags={tags}
-          isDark={isDark}
           isStripped={isStripped}
           isStructural={category === 'Image Structure'}
         />
       ))}
       {isStripped && (
-        <div className="py-2 font-bold text-[14px]" style={{ color: teal }}>
-          ✓ All metadata removed
+        <div
+          className="py-2 font-bold text-[14px]"
+          style={{ color: 'var(--accent)' }}
+          aria-live="polite"
+        >
+          <span aria-hidden="true">✓ </span>All metadata removed
         </div>
       )}
     </div>

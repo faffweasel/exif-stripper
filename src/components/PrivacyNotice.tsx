@@ -1,20 +1,12 @@
-interface Props {
-  readonly isDark: boolean;
-}
-
-export function PrivacyNotice({ isDark }: Props) {
-  const muted = isDark ? '#999999' : '#888888';
-  const teal = isDark ? '#00a3a3' : '#007070';
-  const border = isDark ? '#2a2a2a' : '#c8c8c0';
-
+export function PrivacyNotice() {
   return (
     <div
       style={{
         fontFamily: '"Courier New", Courier, monospace',
         fontSize: 16,
         lineHeight: 1.7,
-        color: muted,
-        borderTop: `1px solid ${border}`,
+        color: 'var(--muted)',
+        borderTop: '1px solid var(--border)',
         paddingTop: 20,
       }}
     >
@@ -23,7 +15,7 @@ export function PrivacyNotice({ isDark }: Props) {
         any server. The{' '}
         <a
           href="https://github.com/faffweasel/exif-stripper"
-          style={{ color: teal, textDecoration: 'none' }}
+          style={{ color: 'var(--accent)', textDecoration: 'none' }}
         >
           source code
         </a>{' '}

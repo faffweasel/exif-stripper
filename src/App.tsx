@@ -1,26 +1,46 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { DropZone } from './components/DropZone';
 import { PrivacyNotice } from './components/PrivacyNotice';
 
 const FONT = '"Courier New", Courier, monospace';
 
-export default function App() {
-  const [isDark, setIsDark] = useState(false);
+function getInitialDark(): boolean {
+  const stored = localStorage.getItem('theme');
+  if (stored === 'dark') return true;
+  if (stored === 'light') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
 
-  const bg = isDark ? '#111111' : '#f0f0ec';
-  const surface = isDark ? '#1a1a1a' : '#ffffff';
-  const text = isDark ? '#c8c8c0' : '#1a1a1a';
-  const muted = isDark ? '#999999' : '#888888';
-  const faint = isDark ? '#808080' : '#aaaaaa';
-  const teal = isDark ? '#00a3a3' : '#007070';
-  const border = isDark ? '#2a2a2a' : '#c8c8c0';
+function applyTheme(isDark: boolean) {
+  document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+}
+
+// Apply before first render to avoid flash of wrong theme
+applyTheme(getInitialDark());
+
+export default function App() {
+  const [isDark, setIsDark] = useState(getInitialDark);
+
+  const handleToggle = useCallback(() => {
+    const next = !isDark;
+    setIsDark(next);
+    applyTheme(next);
+    localStorage.setItem('theme', next ? 'dark' : 'light');
+  }, [isDark]);
 
   return (
-    <div style={{ background: bg, minHeight: '100vh', fontFamily: FONT, color: text }}>
+    <div
+      style={{
+        background: 'var(--bg)',
+        minHeight: '100vh',
+        fontFamily: FONT,
+        color: 'var(--text)',
+      }}
+    >
       <header
         style={{
-          background: surface,
-          borderBottom: `1px solid ${border}`,
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
           padding: '16px 24px',
         }}
       >
@@ -35,11 +55,15 @@ export default function App() {
         >
           <div>
             <div style={{ fontSize: 24, fontWeight: 'bold', letterSpacing: 1 }}>EXIF STRIPPER</div>
-            <div style={{ fontSize: 14, color: muted, marginTop: 2 }}>
+            <div style={{ fontSize: 14, color: 'var(--muted)', marginTop: 2 }}>
               by{' '}
               <a
                 href="https://faffweasel.com"
-                style={{ color: teal, textDecoration: 'none', borderBottom: `1px solid ${border}` }}
+                style={{
+                  color: 'var(--accent)',
+                  textDecoration: 'none',
+                  borderBottom: '1px solid var(--border)',
+                }}
               >
                 faffweasel
               </a>
@@ -48,10 +72,12 @@ export default function App() {
 
           <button
             type="button"
-            onClick={() => setIsDark((d) => !d)}
+            onClick={handleToggle}
+            aria-label="Toggle dark mode"
+            aria-pressed={isDark}
             style={{
-              color: muted,
-              border: `1px solid ${border}`,
+              color: 'var(--muted)',
+              border: '1px solid var(--border)',
               padding: '2px 6px',
               fontSize: 14,
               background: 'transparent',
@@ -69,7 +95,7 @@ export default function App() {
           <h1 style={{ fontSize: 24, fontWeight: 'bold', margin: '0 0 8px 0', letterSpacing: 0.5 }}>
             Strip metadata from your images
           </h1>
-          <p style={{ fontSize: 16, color: muted, margin: 0, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 16, color: 'var(--muted)', margin: 0, lineHeight: 1.6 }}>
             Remove EXIF data, GPS coordinates, camera info, timestamps.
             <br />
             Everything happens in your browser. Nothing is uploaded.
@@ -77,34 +103,34 @@ export default function App() {
         </div>
 
         <DropZone isDark={isDark} />
-        <PrivacyNotice isDark={isDark} />
+        <PrivacyNotice />
       </main>
 
       <footer
         style={{
-          borderTop: `1px solid ${border}`,
+          borderTop: '1px solid var(--border)',
           padding: '14px 24px',
           fontSize: 14,
-          color: faint,
+          color: 'var(--muted)',
           textAlign: 'center',
         }}
       >
-        <a href="https://faffweasel.com" style={{ color: teal, textDecoration: 'none' }}>
+        <a href="https://faffweasel.com" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
           faffweasel.com
         </a>
         <span style={{ margin: '0 6px' }}>·</span>
         <a
           href="https://github.com/faffweasel/exif-stripper/blob/main/LICENCE"
-          style={{ color: teal, textDecoration: 'none' }}
+          style={{ color: 'var(--accent)', textDecoration: 'none' }}
         >
           AGPL-3.0
         </a>
         <span style={{ margin: '0 6px' }}>·</span>
         <a
           href="https://github.com/faffweasel/exif-stripper"
-          style={{ color: teal, textDecoration: 'none' }}
+          style={{ color: 'var(--accent)', textDecoration: 'none' }}
         >
-          github
+          source
         </a>
         <span style={{ margin: '0 6px' }}>·</span>
         <span>EU hosted</span>

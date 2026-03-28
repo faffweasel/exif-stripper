@@ -9,3 +9,11 @@ dist/
 CLAUDE.local.md
 .DS_Store
 scan-results.json
+.claude/.mcp.local.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/

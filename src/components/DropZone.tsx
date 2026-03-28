@@ -107,6 +107,14 @@ const STATUS_ICON: Record<FileEntry['status'], string> = {
   skipped: '—',
 };
 
+const STATUS_LABEL: Record<FileEntry['status'], string> = {
+  queued: 'Pending',
+  processing: 'Processing',
+  done: 'Stripped',
+  error: 'Failed',
+  skipped: 'Skipped',
+};
+
 interface FileRowProps {
   readonly entry: FileEntry;
   readonly isDark: boolean;
@@ -116,28 +124,26 @@ interface FileRowProps {
 }
 
 function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowProps) {
-  const teal = isDark ? '#00a3a3' : '#007070';
-  const muted = isDark ? '#999999' : '#888888';
-  const faint = isDark ? '#808080' : '#aaaaaa';
-  const text = isDark ? '#c8c8c0' : '#1a1a1a';
-  const red = isDark ? '#c66666' : '#a44444';
-  const border = isDark ? '#2a2a2a' : '#c8c8c0';
   const mono = '"Courier New", Courier, monospace';
 
   const statusIconColor =
     entry.status === 'done'
-      ? teal
+      ? 'var(--accent)'
       : entry.status === 'error'
-        ? red
+        ? 'var(--error)'
         : entry.status === 'processing'
-          ? muted
-          : faint;
+          ? 'var(--muted)'
+          : 'var(--faint)';
 
   const isSelectable = entry.originalBuffer !== undefined;
 
   const rowContent = (
     <>
-      <span style={{ flexShrink: 0, width: 14, color: statusIconColor }}>
+      <span
+        style={{ flexShrink: 0, width: 14, color: statusIconColor }}
+        aria-label={STATUS_LABEL[entry.status]}
+        role="img"
+      >
         {STATUS_ICON[entry.status]}
       </span>
       <span
@@ -148,18 +154,18 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
           textAlign: 'left',
-          color: text,
+          color: 'var(--text)',
         }}
       >
         {entry.file.name}
       </span>
       {entry.status === 'done' && entry.result && (
-        <span style={{ color: muted, flexShrink: 0, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flexShrink: 0, fontSize: 12 }}>
           {entry.result.format.toUpperCase()}
         </span>
       )}
       {entry.status === 'processing' && (
-        <span style={{ color: muted, flexShrink: 0 }}>Processing...</span>
+        <span style={{ color: 'var(--muted)', flexShrink: 0 }}>Processing...</span>
       )}
     </>
   );
@@ -167,7 +173,7 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
   return (
     <div
       style={{
-        borderBottom: `1px solid ${border}`,
+        borderBottom: '1px solid var(--border)',
         background: isSelected
           ? isDark
             ? 'rgba(0,163,163,0.08)'
@@ -217,7 +223,7 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
             type="button"
             onClick={onDownload}
             style={{
-              color: teal,
+              color: 'var(--accent)',
               background: 'none',
               border: 'none',
               cursor: 'pointer',
@@ -233,8 +239,9 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
       </div>
       {(entry.status === 'error' || entry.status === 'skipped') && entry.errorMessage && (
         <div
+          role={entry.status === 'error' ? 'alert' : undefined}
           style={{
-            color: entry.status === 'error' ? red : faint,
+            color: entry.status === 'error' ? 'var(--error)' : 'var(--faint)',
             fontSize: 12,
             paddingLeft: 22,
             paddingBottom: 4,
@@ -265,9 +272,7 @@ export function DropZone({ isDark }: Props) {
     };
   }, []);
 
-  const teal = isDark ? '#00a3a3' : '#007070';
-  const muted = isDark ? '#999999' : '#888888';
-  const faint = isDark ? '#808080' : '#aaaaaa';
+  // isDark retained only for rgba overlay values that have no CSS custom property
 
   function handleSingleFile(file: File) {
     // Reject files over the video limit upfront (format-specific limit checked after reading)
@@ -514,14 +519,12 @@ export function DropZone({ isDark }: Props) {
       return false;
     }
   })();
-  const borderColor = isDragging ? teal : isDark ? '#333333' : '#b0b0a8';
+  const borderColor = isDragging ? 'var(--accent)' : isDark ? '#333333' : '#b0b0a8';
   const bgColor = isDragging
     ? isDark
       ? 'rgba(0,128,128,0.05)'
       : 'rgba(0,112,112,0.03)'
-    : isDark
-      ? '#1a1a1a'
-      : '#ffffff';
+    : 'var(--surface)';
 
   const batchProcessingIdx =
     uiState.status === 'batch' ? uiState.entries.findIndex((e) => e.status === 'processing') : -1;
@@ -529,6 +532,28 @@ export function DropZone({ isDark }: Props) {
     uiState.status === 'batch' && selectedIndex !== null ? uiState.entries[selectedIndex] : null;
   const batchDoneCount =
     uiState.status === 'batch' ? uiState.entries.filter((e) => e.status === 'done').length : 0;
+
+  const dropZoneLabel = (() => {
+    switch (uiState.status) {
+      case 'idle':
+      case 'error':
+        return 'Drop zone: drag files here or click to select';
+      case 'processing':
+        return 'Drop zone: processing files';
+      case 'preview':
+        return 'Drop zone: 1 file loaded';
+      case 'done':
+        return 'Drop zone: 1 file loaded';
+      case 'batch':
+        return uiState.isComplete
+          ? `Drop zone: ${uiState.entries.length} files loaded`
+          : 'Drop zone: processing files';
+      default: {
+        const _exhaustive: never = uiState;
+        return _exhaustive;
+      }
+    }
+  })();
 
   return (
     <>
@@ -539,6 +564,7 @@ export function DropZone({ isDark }: Props) {
         accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.gif,.mp4,.mov,.m4v"
         className="hidden"
         onChange={handleInputChange}
+        aria-label="Select files to strip metadata"
       />
 
       {/* biome-ignore lint/a11y/useSemanticElements: must be a div — drag events (onDragOver/onDrop) are unreliable on <button> across browsers */}
@@ -553,7 +579,7 @@ export function DropZone({ isDark }: Props) {
         onDrop={handleDrop}
         role="button"
         tabIndex={0}
-        aria-label="Select files to strip metadata"
+        aria-label={dropZoneLabel}
         style={{
           border: `2px dashed ${borderColor}`,
           background: bgColor,
@@ -564,30 +590,30 @@ export function DropZone({ isDark }: Props) {
       >
         {uiState.status === 'idle' && (
           <>
-            <div className="text-[32px] mb-2.5" style={{ opacity: 0.4, color: muted }}>
+            <div className="text-[32px] mb-2.5" style={{ opacity: 0.4, color: 'var(--muted)' }}>
               +
             </div>
-            <div className="text-[16px] mb-1" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
+            <div className="text-[16px] mb-1" style={{ color: 'var(--text)' }}>
               Drop files here or click to select
             </div>
-            <div className="text-[14px]" style={{ color: faint }}>
+            <div className="text-[14px]" style={{ color: 'var(--faint)' }}>
               JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV — 20 files max
             </div>
           </>
         )}
 
         {uiState.status === 'processing' && (
-          <div className="text-[16px]" style={{ color: muted }}>
+          <div className="text-[16px]" style={{ color: 'var(--muted)' }} aria-live="polite">
             {uiState.message}
           </div>
         )}
 
         {uiState.status === 'error' && (
           <>
-            <div className="text-[16px] mb-3" style={{ color: isDark ? '#c66666' : '#a44444' }}>
+            <div className="text-[16px] mb-3" style={{ color: 'var(--error)' }} role="alert">
               {uiState.message}
             </div>
-            <div className="text-[14px]" style={{ color: faint }}>
+            <div className="text-[14px]" style={{ color: 'var(--faint)' }}>
               Click to try another file
             </div>
           </>
@@ -595,9 +621,9 @@ export function DropZone({ isDark }: Props) {
 
         {uiState.status === 'preview' && (
           <>
-            <div className="text-[16px] mb-4" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
+            <div className="text-[16px] mb-4" style={{ color: 'var(--text)' }}>
               {uiState.file.name}
-              <span style={{ color: muted }}> ({formatBytes(uiState.file.size)})</span>
+              <span style={{ color: 'var(--muted)' }}> ({formatBytes(uiState.file.size)})</span>
             </div>
             {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on metadata panel interactions */}
             <div
@@ -605,19 +631,18 @@ export function DropZone({ isDark }: Props) {
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
-              <MetadataSearch value={filterText} onChange={setFilterText} isDark={isDark} />
+              <MetadataSearch value={filterText} onChange={setFilterText} />
               <MetadataPanel
                 originalBuffer={uiState.originalBuffer}
                 fileName={uiState.file.name}
-                isDark={isDark}
                 filterText={filterText}
                 format={detectFormat(uiState.originalBuffer) ?? undefined}
               />
               <button
                 type="button"
                 onClick={handleStrip}
-                className="w-full text-[16px] font-bold tracking-[0.5px] text-white py-2.5 mt-4 cursor-pointer border-0"
-                style={{ background: teal }}
+                className="w-full text-[16px] font-bold tracking-[0.5px] py-2.5 mt-4 cursor-pointer border-0 hover:opacity-80"
+                style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
               >
                 STRIP METADATA
               </button>
@@ -627,9 +652,12 @@ export function DropZone({ isDark }: Props) {
 
         {uiState.status === 'done' && (
           <>
-            <div className="text-[16px] mb-4" style={{ color: isDark ? '#c8c8c0' : '#1a1a1a' }}>
-              <span style={{ color: teal }}>✓</span> {uiState.file.name}
-              <span style={{ color: muted }}> ({formatBytes(uiState.file.size)})</span>
+            <div className="text-[16px] mb-4" style={{ color: 'var(--text)' }}>
+              <span style={{ color: 'var(--accent)' }} aria-hidden="true">
+                ✓
+              </span>{' '}
+              {uiState.file.name}
+              <span style={{ color: 'var(--muted)' }}> ({formatBytes(uiState.file.size)})</span>
             </div>
             {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on metadata panel interactions */}
             <div
@@ -637,12 +665,11 @@ export function DropZone({ isDark }: Props) {
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
-              <MetadataSearch value={filterText} onChange={setFilterText} isDark={isDark} />
+              <MetadataSearch value={filterText} onChange={setFilterText} />
               <MetadataPanel
                 originalBuffer={uiState.originalBuffer}
                 strippedBuffer={uiState.strippedBuffer}
                 fileName={uiState.file.name}
-                isDark={isDark}
                 filterText={filterText}
                 format={uiState.result.format}
               />
@@ -653,31 +680,37 @@ export function DropZone({ isDark }: Props) {
                     e.stopPropagation();
                     triggerDownload(uiState.blob, `stripped-${uiState.file.name}`);
                   }}
-                  className="flex-1 text-[16px] font-bold tracking-[0.5px] text-white py-2.5 cursor-pointer border-0"
-                  style={{ background: teal }}
+                  className="flex-1 text-[16px] font-bold tracking-[0.5px] py-2.5 cursor-pointer border-0 hover:opacity-80"
+                  style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
                 >
                   DOWNLOAD CLEAN FILE
                 </button>
                 {canCopy && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleCopy();
-                    }}
-                    className="text-[14px] font-bold tracking-[0.5px] cursor-pointer"
-                    style={{
-                      color: teal,
-                      background: 'none',
-                      border: `1px solid ${teal}`,
-                      padding: '0 16px',
-                      flexShrink: 0,
-                      fontFamily: '"Courier New", Courier, monospace',
-                      minWidth: 90,
-                    }}
-                  >
-                    {copyState === 'copied' ? 'COPIED ✓' : 'COPY'}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleCopy();
+                      }}
+                      className="text-[14px] font-bold tracking-[0.5px] cursor-pointer hover:opacity-80"
+                      style={{
+                        color: 'var(--accent)',
+                        background: 'none',
+                        border: '1px solid var(--accent)',
+                        padding: '0 16px',
+                        flexShrink: 0,
+                        fontFamily: '"Courier New", Courier, monospace',
+                        minWidth: 90,
+                        minHeight: 44,
+                      }}
+                    >
+                      {copyState === 'copied' ? 'COPIED ✓' : 'COPY'}
+                    </button>
+                    <output className="sr-only">
+                      {copyState === 'copied' ? 'Copied to clipboard' : ''}
+                    </output>
+                  </>
                 )}
               </div>
               <div className="mt-3 text-center">
@@ -685,7 +718,7 @@ export function DropZone({ isDark }: Props) {
                   type="button"
                   onClick={handleReset}
                   className="text-[14px] cursor-pointer border-0 bg-transparent underline"
-                  style={{ color: teal }}
+                  style={{ color: 'var(--accent)' }}
                 >
                   Strip another image
                 </button>
@@ -697,7 +730,11 @@ export function DropZone({ isDark }: Props) {
         {uiState.status === 'batch' && (
           <>
             {!uiState.isComplete && (
-              <div className="text-[14px] mb-3" style={{ color: muted }}>
+              <div
+                className="text-[14px] mb-3"
+                style={{ color: 'var(--muted)' }}
+                aria-live="polite"
+              >
                 {batchProcessingIdx >= 0
                   ? `Processing ${batchProcessingIdx + 1} of ${uiState.entries.length}...`
                   : `${batchDoneCount} of ${uiState.entries.length} processed`}
@@ -713,8 +750,8 @@ export function DropZone({ isDark }: Props) {
                 <button
                   type="button"
                   onClick={() => downloadAllAsZip(uiState.entries)}
-                  className="w-full text-[14px] font-bold tracking-[0.5px] text-white py-2 mb-3 cursor-pointer border-0"
-                  style={{ background: teal }}
+                  className="w-full text-[14px] font-bold tracking-[0.5px] py-2 mb-3 cursor-pointer border-0 hover:opacity-80"
+                  style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
                 >
                   DOWNLOAD ALL ({batchDoneCount} FILES)
                 </button>
@@ -735,12 +772,11 @@ export function DropZone({ isDark }: Props) {
               </div>
               {batchSelected !== null && batchSelected.originalBuffer !== undefined && (
                 <div className="mt-4">
-                  <MetadataSearch value={filterText} onChange={setFilterText} isDark={isDark} />
+                  <MetadataSearch value={filterText} onChange={setFilterText} />
                   <MetadataPanel
                     originalBuffer={batchSelected.originalBuffer}
                     strippedBuffer={batchSelected.strippedBuffer}
                     fileName={batchSelected.file.name}
-                    isDark={isDark}
                     filterText={filterText}
                     format={
                       batchSelected.result?.format ??
@@ -756,7 +792,7 @@ export function DropZone({ isDark }: Props) {
                     type="button"
                     onClick={handleReset}
                     className="text-[14px] cursor-pointer border-0 bg-transparent underline"
-                    style={{ color: teal }}
+                    style={{ color: 'var(--accent)' }}
                   >
                     Strip another batch
                   </button>
@@ -769,7 +805,7 @@ export function DropZone({ isDark }: Props) {
 
       <div
         className="text-center text-[13px] mb-6"
-        style={{ color: faint, fontFamily: '"Courier New", Courier, monospace' }}
+        style={{ color: 'var(--muted)', fontFamily: '"Courier New", Courier, monospace' }}
       >
         Supports JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV
       </div>
