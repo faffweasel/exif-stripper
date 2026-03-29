@@ -135,6 +135,7 @@ function Section({
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
         className="w-full flex justify-between items-center py-1.5 bg-transparent border-0 cursor-pointer text-left"
         style={{
           fontFamily: '"Courier New", Courier, monospace',

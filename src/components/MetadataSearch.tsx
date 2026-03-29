@@ -35,8 +35,8 @@ export function MetadataSearch({ value, onChange }: Props) {
         <button
           type="button"
           onClick={handleClear}
-          className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent border-0 cursor-pointer p-0 leading-none"
-          style={{ color: 'var(--muted)', fontSize: 16 }}
+          className="absolute right-0 top-1/2 -translate-y-1/2 bg-transparent border-0 cursor-pointer leading-none flex items-center justify-center"
+          style={{ color: 'var(--muted)', fontSize: 16, minWidth: 44, minHeight: 44 }}
           aria-label="Clear filter"
         >
           ×

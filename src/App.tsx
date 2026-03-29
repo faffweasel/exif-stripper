@@ -38,10 +38,12 @@ export default function App() {
       }}
     >
       <header
+        className="px-4 sm:px-6"
         style={{
           background: 'var(--surface)',
           borderBottom: '1px solid var(--border)',
-          padding: '16px 24px',
+          paddingTop: 16,
+          paddingBottom: 16,
         }}
       >
         <div
@@ -54,7 +56,9 @@ export default function App() {
           }}
         >
           <div>
-            <div style={{ fontSize: 24, fontWeight: 'bold', letterSpacing: 1 }}>EXIF STRIPPER</div>
+            <h1 style={{ fontSize: 24, fontWeight: 'bold', letterSpacing: 1, margin: 0 }}>
+              EXIF STRIPPER
+            </h1>
             <div style={{ fontSize: 14, color: 'var(--muted)', marginTop: 2 }}>
               by{' '}
               <a
@@ -78,11 +82,13 @@ export default function App() {
             style={{
               color: 'var(--muted)',
               border: '1px solid var(--border)',
-              padding: '2px 6px',
+              padding: '8px 12px',
               fontSize: 14,
               background: 'transparent',
               cursor: 'pointer',
               fontFamily: FONT,
+              minHeight: 44,
+              minWidth: 44,
             }}
           >
             {isDark ? 'light' : 'dark'}
@@ -90,11 +96,14 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 720, margin: '0 auto', padding: '40px 24px 60px' }}>
+      <main
+        className="px-4 sm:px-6"
+        style={{ maxWidth: 720, margin: '0 auto', paddingTop: 40, paddingBottom: 60 }}
+      >
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 'bold', margin: '0 0 8px 0', letterSpacing: 0.5 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: '0 0 8px 0', letterSpacing: 0.5 }}>
             Strip metadata from your images
-          </h1>
+          </h2>
           <p style={{ fontSize: 16, color: 'var(--muted)', margin: 0, lineHeight: 1.6 }}>
             Remove EXIF data, GPS coordinates, camera info, timestamps.
             <br />
@@ -102,38 +111,45 @@ export default function App() {
           </p>
         </div>
 
-        <DropZone isDark={isDark} />
+        <DropZone />
         <PrivacyNotice />
       </main>
 
       <footer
+        className="px-4 sm:px-6"
         style={{
           borderTop: '1px solid var(--border)',
-          padding: '14px 24px',
+          paddingTop: 14,
+          paddingBottom: 14,
           fontSize: 14,
           color: 'var(--muted)',
           textAlign: 'center',
         }}
       >
-        <a href="https://faffweasel.com" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-          faffweasel.com
-        </a>
-        <span style={{ margin: '0 6px' }}>·</span>
-        <a
-          href="https://github.com/faffweasel/exif-stripper/blob/main/LICENCE"
-          style={{ color: 'var(--accent)', textDecoration: 'none' }}
-        >
-          AGPL-3.0
-        </a>
-        <span style={{ margin: '0 6px' }}>·</span>
-        <a
-          href="https://github.com/faffweasel/exif-stripper"
-          style={{ color: 'var(--accent)', textDecoration: 'none' }}
-        >
-          source
-        </a>
-        <span style={{ margin: '0 6px' }}>·</span>
-        <span>EU hosted</span>
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          <a
+            href="https://faffweasel.com"
+            style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+          >
+            faffweasel.com
+          </a>
+          <span style={{ margin: '0 6px' }}>·</span>
+          <a
+            href="https://github.com/faffweasel/exif-stripper/blob/main/LICENCE"
+            style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+          >
+            AGPL-3.0
+          </a>
+          <span style={{ margin: '0 6px' }}>·</span>
+          <a
+            href="https://github.com/faffweasel/exif-stripper"
+            style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+          >
+            source
+          </a>
+          <span style={{ margin: '0 6px' }}>·</span>
+          <span>EU hosted</span>
+        </div>
       </footer>
     </div>
   );

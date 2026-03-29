@@ -11,6 +11,9 @@
   --surface: #ffffff;
   --focus-ring: #007070;
   --error: #a44444;
+  --drop-border: #b0b0a8;
+  --drop-drag-bg: rgba(0, 112, 112, 0.03);
+  --row-select-bg: rgba(0, 112, 112, 0.05);
 }
 
 [data-theme="dark"] {
@@ -24,6 +27,9 @@
   --surface: #181818;
   --focus-ring: #00a3a3;
   --error: #c66666;
+  --drop-border: #333333;
+  --drop-drag-bg: rgba(0, 128, 128, 0.05);
+  --row-select-bg: rgba(0, 163, 163, 0.08);
 }
 
 :focus-visible {

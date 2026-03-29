@@ -2,7 +2,6 @@ export function PrivacyNotice() {
   return (
     <div
       style={{
-        fontFamily: '"Courier New", Courier, monospace',
         fontSize: 16,
         lineHeight: 1.7,
         color: 'var(--muted)',

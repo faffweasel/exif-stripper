@@ -1,15 +1,11 @@
 import { zipSync } from 'fflate';
 import { useEffect, useRef, useState } from 'react';
-import { detectFormat } from '../lib/detect-format';
+import { detectFormat, type ImageFormat } from '../lib/detect-format';
 import type { StripResult } from '../lib/strip';
 import { stripMetadata } from '../lib/strip';
 import { getFilesFromDataTransfer } from '../utils/folder-enumerate';
 import { MetadataPanel } from './MetadataPanel';
 import { MetadataSearch } from './MetadataSearch';
-
-interface Props {
-  readonly isDark: boolean;
-}
 
 interface FileEntry {
   readonly id: number;
@@ -25,7 +21,7 @@ interface FileEntry {
 type UIState =
   | { status: 'idle' }
   | { status: 'error'; message: string }
-  | { status: 'preview'; file: File; originalBuffer: ArrayBuffer }
+  | { status: 'preview'; file: File; originalBuffer: ArrayBuffer; format: ImageFormat }
   | { status: 'processing'; message: string }
   | {
       status: 'done';
@@ -97,7 +93,7 @@ function downloadAllAsZip(entries: readonly FileEntry[]): void {
   }
   const zip = zipSync(files);
   const blob = new Blob([zip.buffer as ArrayBuffer], { type: 'application/zip' }); // safe: fflate always allocates plain ArrayBuffer
-  triggerDownload(blob, 'stripped-images.zip');
+  triggerDownload(blob, 'stripped-files.zip');
 }
 
 const STATUS_ICON: Record<FileEntry['status'], string> = {
@@ -118,14 +114,13 @@ const STATUS_LABEL: Record<FileEntry['status'], string> = {
 
 interface FileRowProps {
   readonly entry: FileEntry;
-  readonly isDark: boolean;
   readonly isSelected: boolean;
   readonly onSelect: () => void;
   readonly onDownload: () => void;
 }
 
-function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowProps) {
-  const mono = '"Courier New", Courier, monospace';
+function FileRow({ entry, isSelected, onSelect, onDownload }: FileRowProps) {
+  const mono = 'inherit';
 
   const statusIconColor =
     entry.status === 'done'
@@ -141,6 +136,7 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
   const rowContent = (
     <>
       <span
+        className={entry.status === 'processing' ? 'animate-pulse' : undefined}
         style={{ flexShrink: 0, width: 14, color: statusIconColor }}
         aria-label={STATUS_LABEL[entry.status]}
         role="img"
@@ -175,11 +171,7 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
     <div
       style={{
         borderBottom: '1px solid var(--border)',
-        background: isSelected
-          ? isDark
-            ? 'rgba(0,163,163,0.08)'
-            : 'rgba(0,112,112,0.05)'
-          : 'transparent',
+        background: isSelected ? 'var(--row-select-bg)' : 'transparent',
         fontFamily: mono,
         fontSize: 14,
       }}
@@ -223,6 +215,7 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
           <button
             type="button"
             onClick={onDownload}
+            aria-label={`Download stripped-${entry.file.name}`}
             style={{
               color: 'var(--accent)',
               background: 'none',
@@ -255,25 +248,34 @@ function FileRow({ entry, isDark, isSelected, onSelect, onDownload }: FileRowPro
   );
 }
 
-export function DropZone({ isDark }: Props) {
+export function DropZone() {
   const [uiState, setUiState] = useState<UIState>({ status: 'idle' });
   const [filterText, setFilterText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'unavailable'>('idle');
+  const [downloadState, setDownloadState] = useState<'idle' | 'downloaded'>('idle');
   const dragCount = useRef(0); // counter to avoid flicker when cursor moves over child elements
   const inputRef = useRef<HTMLInputElement>(null);
+  const downloadRef = useRef<HTMLButtonElement>(null);
   const sessionRef = useRef(0); // incremented on each new file/batch to cancel stale async work
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const downloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextEntryIdRef = useRef(0);
 
   useEffect(() => {
     return () => {
       if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+      if (downloadTimerRef.current !== null) clearTimeout(downloadTimerRef.current);
     };
   }, []);
 
-  // isDark retained only for rgba overlay values that have no CSS custom property
+  // Fix 9: move focus to download button when strip completes
+  useEffect(() => {
+    if (uiState.status === 'done') {
+      downloadRef.current?.focus();
+    }
+  }, [uiState.status]);
 
   function handleSingleFile(file: File) {
     // Reject files over the video limit upfront (format-specific limit checked after reading)
@@ -296,14 +298,15 @@ export function DropZone({ isDark }: Props) {
         });
         return;
       }
-      if (detectFormat(buffer) === null) {
+      const format = detectFormat(buffer);
+      if (format === null) {
         setUiState({
           status: 'error',
           message: `"${file.name}" is not a supported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF, MP4, and MOV.`,
         });
         return;
       }
-      setUiState({ status: 'preview', file, originalBuffer: buffer });
+      setUiState({ status: 'preview', file, originalBuffer: buffer, format });
     };
     reader.onerror = () => {
       if (sessionRef.current !== session) return;
@@ -448,7 +451,12 @@ export function DropZone({ isDark }: Props) {
       clearTimeout(copyTimerRef.current);
       copyTimerRef.current = null;
     }
+    if (downloadTimerRef.current !== null) {
+      clearTimeout(downloadTimerRef.current);
+      downloadTimerRef.current = null;
+    }
     setCopyState('idle');
+    setDownloadState('idle');
 
     if (files.length === 1) {
       handleSingleFile(files[0]);
@@ -499,7 +507,12 @@ export function DropZone({ isDark }: Props) {
       clearTimeout(copyTimerRef.current);
       copyTimerRef.current = null;
     }
+    if (downloadTimerRef.current !== null) {
+      clearTimeout(downloadTimerRef.current);
+      downloadTimerRef.current = null;
+    }
     setCopyState('idle');
+    setDownloadState('idle');
     setUiState({ status: 'processing', message: 'Scanning folder...' });
 
     let files: File[];
@@ -579,7 +592,12 @@ export function DropZone({ isDark }: Props) {
       clearTimeout(copyTimerRef.current);
       copyTimerRef.current = null;
     }
+    if (downloadTimerRef.current !== null) {
+      clearTimeout(downloadTimerRef.current);
+      downloadTimerRef.current = null;
+    }
     setCopyState('idle');
+    setDownloadState('idle');
     sessionRef.current++;
     setFilterText('');
     setSelectedIndex(null);
@@ -599,12 +617,8 @@ export function DropZone({ isDark }: Props) {
       return false;
     }
   })();
-  const borderColor = isDragging ? 'var(--accent)' : isDark ? '#333333' : '#b0b0a8';
-  const bgColor = isDragging
-    ? isDark
-      ? 'rgba(0,128,128,0.05)'
-      : 'rgba(0,112,112,0.03)'
-    : 'var(--surface)';
+  const borderColor = isDragging ? 'var(--accent)' : 'var(--drop-border)';
+  const bgColor = isDragging ? 'var(--drop-drag-bg)' : 'var(--surface)';
 
   const batchProcessingIdx =
     uiState.status === 'batch' ? uiState.entries.findIndex((e) => e.status === 'processing') : -1;
@@ -647,7 +661,8 @@ export function DropZone({ isDark }: Props) {
         aria-label="Select files to strip metadata"
       />
 
-      {/* biome-ignore lint/a11y/useSemanticElements: must be a div — drag events (onDragOver/onDrop) are unreliable on <button> across browsers */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: div needs drag handlers in all states; role="button" is only set when idle/error */}
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-label is conditionally set alongside role="button" */}
       <div
         onClick={() => isClickable && inputRef.current?.click()}
         onKeyDown={(e) =>
@@ -657,14 +672,13 @@ export function DropZone({ isDark }: Props) {
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        role="button"
-        tabIndex={0}
+        role={isClickable ? 'button' : 'region'}
+        tabIndex={isClickable ? 0 : undefined}
         aria-label={dropZoneLabel}
         style={{
           border: `2px dashed ${borderColor}`,
           background: bgColor,
-          transition: 'border-color 0.15s ease, background-color 0.15s ease',
-          fontFamily: '"Courier New", Courier, monospace',
+          transition: isDragging ? 'border-color 0.15s ease, background-color 0.15s ease' : 'none',
         }}
         className={`px-6 py-8 text-center mb-6 ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
       >
@@ -677,7 +691,7 @@ export function DropZone({ isDark }: Props) {
               Drop files here or click to select
             </div>
             <div className="text-[14px]" style={{ color: 'var(--faint)' }}>
-              JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV · M4A — 20 files max
+              JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV — 20 files max
             </div>
           </>
         )}
@@ -694,7 +708,7 @@ export function DropZone({ isDark }: Props) {
               {uiState.message}
             </div>
             <div className="text-[14px]" style={{ color: 'var(--faint)' }}>
-              Click to try another file
+              Drop or click to try another file
             </div>
           </>
         )}
@@ -704,6 +718,12 @@ export function DropZone({ isDark }: Props) {
             <div className="text-[16px] mb-4" style={{ color: 'var(--text)' }}>
               {uiState.file.name}
               <span style={{ color: 'var(--muted)' }}> ({formatBytes(uiState.file.size)})</span>
+              <span
+                className="ml-2 text-[12px] font-bold tracking-[0.5px] uppercase"
+                style={{ color: 'var(--accent)' }}
+              >
+                {uiState.format.toUpperCase()}
+              </span>
             </div>
             {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on metadata panel interactions */}
             <div
@@ -716,13 +736,19 @@ export function DropZone({ isDark }: Props) {
                 originalBuffer={uiState.originalBuffer}
                 fileName={uiState.file.name}
                 filterText={filterText}
-                format={detectFormat(uiState.originalBuffer) ?? undefined}
+                format={uiState.format}
               />
               <button
                 type="button"
                 onClick={handleStrip}
                 className="w-full text-[16px] font-bold tracking-[0.5px] py-2.5 mt-4 cursor-pointer border-0 hover:opacity-80"
-                style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
+                style={{
+                  background: 'var(--accent)',
+                  color: 'var(--bg)',
+                  minHeight: 44,
+                  position: 'sticky',
+                  bottom: 0,
+                }}
               >
                 STRIP METADATA
               </button>
@@ -755,15 +781,22 @@ export function DropZone({ isDark }: Props) {
               />
               <div className="flex gap-2 mt-4">
                 <button
+                  ref={downloadRef}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     triggerDownload(uiState.blob, `stripped-${uiState.file.name}`);
+                    if (downloadTimerRef.current !== null) clearTimeout(downloadTimerRef.current);
+                    setDownloadState('downloaded');
+                    downloadTimerRef.current = setTimeout(() => {
+                      setDownloadState('idle');
+                      downloadTimerRef.current = null;
+                    }, 2000);
                   }}
                   className="flex-1 text-[16px] font-bold tracking-[0.5px] py-2.5 cursor-pointer border-0 hover:opacity-80"
                   style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
                 >
-                  DOWNLOAD CLEAN FILE
+                  {downloadState === 'downloaded' ? 'DOWNLOADED ✓' : 'DOWNLOAD CLEAN FILE'}
                 </button>
                 {canCopy && (
                   <>
@@ -780,7 +813,7 @@ export function DropZone({ isDark }: Props) {
                         border: '1px solid var(--accent)',
                         padding: '0 16px',
                         flexShrink: 0,
-                        fontFamily: '"Courier New", Courier, monospace',
+                        fontFamily: 'inherit',
                         minWidth: 90,
                         minHeight: 44,
                       }}
@@ -800,7 +833,7 @@ export function DropZone({ isDark }: Props) {
                   className="text-[14px] cursor-pointer border-0 bg-transparent underline"
                   style={{ color: 'var(--accent)' }}
                 >
-                  Strip another image
+                  Strip another file
                 </button>
               </div>
             </div>
@@ -809,47 +842,59 @@ export function DropZone({ isDark }: Props) {
 
         {uiState.status === 'batch' && (
           <>
-            {!uiState.isComplete && (
-              <div
-                className="text-[14px] mb-3"
-                style={{ color: 'var(--muted)' }}
-                aria-live="polite"
-              >
-                {batchProcessingIdx >= 0
+            <div
+              className="text-[14px] mb-3"
+              style={{ color: uiState.isComplete ? 'var(--accent)' : 'var(--muted)' }}
+              aria-live="polite"
+            >
+              {uiState.isComplete
+                ? `All ${uiState.entries.length} files processed`
+                : batchProcessingIdx >= 0
                   ? `Processing ${batchProcessingIdx + 1} of ${uiState.entries.length}...`
                   : `${batchDoneCount} of ${uiState.entries.length} processed`}
-              </div>
-            )}
+            </div>
             {/* biome-ignore lint/a11y/noStaticElementInteractions: propagation barrier — prevents drop zone click/key handler from firing on file list interactions */}
             <div
               className="text-left max-w-[460px] mx-auto"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
-              {batchDoneCount >= 2 && (
-                <button
-                  type="button"
-                  onClick={() => downloadAllAsZip(uiState.entries)}
-                  className="w-full text-[14px] font-bold tracking-[0.5px] py-2 mb-3 cursor-pointer border-0 hover:opacity-80"
-                  style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
-                >
-                  DOWNLOAD ALL ({batchDoneCount} FILES)
-                </button>
+              {uiState.isComplete && batchDoneCount >= 2 && (
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={() => downloadAllAsZip(uiState.entries)}
+                    className="w-full text-[14px] font-bold tracking-[0.5px] py-2 cursor-pointer border-0 hover:opacity-80"
+                    style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
+                  >
+                    DOWNLOAD ALL ({batchDoneCount} FILES)
+                  </button>
+                  <div className="mt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="text-[14px] cursor-pointer border-0 bg-transparent underline"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      Strip another batch
+                    </button>
+                  </div>
+                </div>
               )}
-              <div className="mb-2">
+              <ul className="mb-2 list-none p-0 m-0">
                 {uiState.entries.map((entry, i) => (
-                  <FileRow
-                    key={entry.id}
-                    entry={entry}
-                    isDark={isDark}
-                    isSelected={selectedIndex === i}
-                    onSelect={() => setSelectedIndex((prev) => (prev === i ? null : i))}
-                    onDownload={() =>
-                      entry.blob && triggerDownload(entry.blob, `stripped-${entry.file.name}`)
-                    }
-                  />
+                  <li key={entry.id}>
+                    <FileRow
+                      entry={entry}
+                      isSelected={selectedIndex === i}
+                      onSelect={() => setSelectedIndex((prev) => (prev === i ? null : i))}
+                      onDownload={() =>
+                        entry.blob && triggerDownload(entry.blob, `stripped-${entry.file.name}`)
+                      }
+                    />
+                  </li>
                 ))}
-              </div>
+              </ul>
               {batchSelected !== null && batchSelected.originalBuffer !== undefined && (
                 <div className="mt-4">
                   <MetadataSearch value={filterText} onChange={setFilterText} />
@@ -883,11 +928,8 @@ export function DropZone({ isDark }: Props) {
         )}
       </div>
 
-      <div
-        className="text-center text-[13px] mb-6"
-        style={{ color: 'var(--muted)', fontFamily: '"Courier New", Courier, monospace' }}
-      >
-        Supports JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV · M4A
+      <div className="text-center text-[13px] mb-6" style={{ color: 'var(--muted)' }}>
+        Supports JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV
       </div>
     </>
   );

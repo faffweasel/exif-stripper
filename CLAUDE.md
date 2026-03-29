@@ -54,13 +54,13 @@ Match the ExifTool component in `faffweasel-full-mockup.jsx`.
 
 | Token | Light | Dark |
 |---|---|---|
-| bg | `#f0f0ec` | `#111111` |
-| surface | `#ffffff` | `#1a1a1a` |
+| bg | `#f4f4f0` | `#0e0e0e` |
+| surface | `#ffffff` | `#181818` |
 | text | `#1a1a1a` | `#c8c8c0` |
-| muted | `#888888` | `#999999` |
-| faint | `#aaaaaa` | `#808080` |
-| accent (teal) | `#007070` | `#008080` |
-| border | `#c8c8c0` | `#2a2a2a` |
+| muted | `#6b6b6b` | `#a3a3a3` |
+| faint | `#767676` | `#949494` |
+| accent (teal) | `#007070` | `#00a3a3` |
+| border | `#8c8c85` | `#3a3a3a` |
 
 ### Typography
 
