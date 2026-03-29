@@ -36,6 +36,8 @@ src/
 │   ├── strip-webp.ts         ← WebP metadata removal
 │   ├── strip-heic.ts         ← HEIC/HEIF metadata removal (ISOBMFF)
 │   └── strip.ts              ← public API: detect + dispatch
+├── utils/
+│   └── folder-enumerate.ts    ← recursive folder enumeration from drag-and-drop
 ├── components/
 │   ├── DropZone.tsx           ← drag-and-drop + processed result (both states)
 │   └── PrivacyNotice.tsx
