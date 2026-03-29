@@ -14,7 +14,7 @@ export function PrivacyNotice() {
         any server. The{' '}
         <a
           href="https://github.com/faffweasel/exif-stripper"
-          style={{ color: 'var(--accent)', textDecoration: 'none' }}
+          style={{ color: 'var(--accent)', textDecoration: 'underline' }}
         >
           source code
         </a>{' '}

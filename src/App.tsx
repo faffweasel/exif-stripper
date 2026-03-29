@@ -81,7 +81,7 @@ export default function App() {
             aria-pressed={isDark}
             style={{
               color: 'var(--muted)',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--drop-border)',
               padding: '8px 12px',
               fontSize: 14,
               background: 'transparent',

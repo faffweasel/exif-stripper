@@ -145,7 +145,8 @@ function Section({
       >
         <span className="font-bold tracking-[0.5px] uppercase">{category}</span>
         <span style={{ color: 'var(--muted)' }}>
-          {tags.length} {tags.length === 1 ? 'tag' : 'tags'}&nbsp;{expanded ? '▲' : '▼'}
+          {tags.length} {tags.length === 1 ? 'tag' : 'tags'}&nbsp;
+          <span aria-hidden="true">{expanded ? '▲' : '▼'}</span>
         </span>
       </button>
       {isStructural && (
@@ -171,12 +172,18 @@ function Section({
                 gap: '0 16px',
                 padding: '3px 0',
                 textDecoration: applyStrikethrough ? 'line-through' : 'none',
-                opacity: applyStrikethrough ? 0.45 : 1,
+                color: applyStrikethrough ? 'var(--muted)' : undefined,
                 fontSize: 14,
               }}
             >
-              <span style={{ color: 'var(--muted)' }}>{name}</span>
-              <span style={{ color: 'var(--text)', overflowWrap: 'break-word', minWidth: 0 }}>
+              <span style={{ color: applyStrikethrough ? 'inherit' : 'var(--muted)' }}>{name}</span>
+              <span
+                style={{
+                  color: applyStrikethrough ? 'inherit' : 'var(--text)',
+                  overflowWrap: 'break-word',
+                  minWidth: 0,
+                }}
+              >
                 {value}
               </span>
             </div>
@@ -232,15 +239,18 @@ export function MetadataPanel({ originalBuffer, strippedBuffer, filterText = '',
           isStructural={category === 'Image Structure'}
         />
       ))}
-      {isStripped && (
-        <div
-          className="py-2 font-bold text-[14px]"
-          style={{ color: 'var(--accent)' }}
-          aria-live="polite"
-        >
-          <span aria-hidden="true">✓ </span>All metadata removed
-        </div>
-      )}
+      <div
+        className="py-2 font-bold text-[14px]"
+        style={{ color: 'var(--accent)' }}
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {isStripped && (
+          <>
+            <span aria-hidden="true">✓ </span>All metadata removed
+          </>
+        )}
+      </div>
     </div>
   );
 }

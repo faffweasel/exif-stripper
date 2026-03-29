@@ -27,7 +27,7 @@ export function MetadataSearch({ value, onChange }: Props) {
           fontFamily: '"Courier New", Courier, monospace',
           color: 'var(--text)',
           background: 'var(--surface)',
-          border: '1px solid var(--border)',
+          border: '1px solid var(--drop-border)',
           boxSizing: 'border-box',
         }}
       />

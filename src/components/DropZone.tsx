@@ -138,11 +138,11 @@ function FileRow({ entry, isSelected, onSelect, onDownload }: FileRowProps) {
       <span
         className={entry.status === 'processing' ? 'animate-pulse' : undefined}
         style={{ flexShrink: 0, width: 14, color: statusIconColor }}
-        aria-label={STATUS_LABEL[entry.status]}
-        role="img"
+        aria-hidden="true"
       >
         {STATUS_ICON[entry.status]}
       </span>
+      <span className="sr-only">{STATUS_LABEL[entry.status]}</span>
       <span
         style={{
           flex: 1,
@@ -258,6 +258,8 @@ export function DropZone() {
   const dragCount = useRef(0); // counter to avoid flicker when cursor moves over child elements
   const inputRef = useRef<HTMLInputElement>(null);
   const downloadRef = useRef<HTMLButtonElement>(null);
+  const downloadAllRef = useRef<HTMLButtonElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef(0); // incremented on each new file/batch to cancel stale async work
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const downloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -270,12 +272,20 @@ export function DropZone() {
     };
   }, []);
 
-  // Fix 9: move focus to download button when strip completes
   useEffect(() => {
     if (uiState.status === 'done') {
       downloadRef.current?.focus();
+    } else if (uiState.status === 'error') {
+      dropZoneRef.current?.focus();
     }
   }, [uiState.status]);
+
+  const batchComplete = uiState.status === 'batch' && uiState.isComplete;
+  useEffect(() => {
+    if (batchComplete) {
+      downloadAllRef.current?.focus();
+    }
+  }, [batchComplete]);
 
   function handleSingleFile(file: File) {
     // Reject files over the video limit upfront (format-specific limit checked after reading)
@@ -664,6 +674,7 @@ export function DropZone() {
       {/* biome-ignore lint/a11y/noStaticElementInteractions: div needs drag handlers in all states; role="button" is only set when idle/error */}
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-label is conditionally set alongside role="button" */}
       <div
+        ref={dropZoneRef}
         onClick={() => isClickable && inputRef.current?.click()}
         onKeyDown={(e) =>
           (e.key === 'Enter' || e.key === ' ') && isClickable && inputRef.current?.click()
@@ -821,7 +832,7 @@ export function DropZone() {
                       {copyState === 'copied' ? 'COPIED ✓' : 'COPY'}
                     </button>
                     <output className="sr-only">
-                      {copyState === 'copied' ? 'Copied to clipboard' : ''}
+                      {copyState === 'copied' ? 'Copied to clipboard' : '\u00a0'}
                     </output>
                   </>
                 )}
@@ -862,6 +873,7 @@ export function DropZone() {
               {uiState.isComplete && batchDoneCount >= 2 && (
                 <div className="mb-3">
                   <button
+                    ref={downloadAllRef}
                     type="button"
                     onClick={() => downloadAllAsZip(uiState.entries)}
                     className="w-full text-[14px] font-bold tracking-[0.5px] py-2 cursor-pointer border-0 hover:opacity-80"
@@ -926,10 +938,6 @@ export function DropZone() {
             </div>
           </>
         )}
-      </div>
-
-      <div className="text-center text-[13px] mb-6" style={{ color: 'var(--muted)' }}>
-        Supports JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV
       </div>
     </>
   );
