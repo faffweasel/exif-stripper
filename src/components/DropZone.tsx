@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { detectFormat } from '../lib/detect-format';
 import type { StripResult } from '../lib/strip';
 import { stripMetadata } from '../lib/strip';
+import { getFilesFromDataTransfer } from '../utils/folder-enumerate';
 import { MetadataPanel } from './MetadataPanel';
 import { MetadataSearch } from './MetadataSearch';
 
@@ -459,11 +460,83 @@ export function DropZone({ isDark }: Props) {
     if (dragCount.current === 0) setIsDragging(false);
   }
 
-  function handleDrop(e: React.DragEvent) {
+  async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     dragCount.current = 0;
     setIsDragging(false);
-    handleFileList(e.dataTransfer.files);
+
+    // Detect folder drop before any await — dataTransfer is only valid synchronously
+    let hasDirectory = false;
+    const items = e.dataTransfer.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry?.();
+        if (entry?.isDirectory) {
+          hasDirectory = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasDirectory) {
+      handleFileList(e.dataTransfer.files);
+      return;
+    }
+
+    // Folder drop — reset session state
+    sessionRef.current++;
+    const session = sessionRef.current;
+    setFilterText('');
+    setSelectedIndex(null);
+    if (copyTimerRef.current !== null) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+    setCopyState('idle');
+    setUiState({ status: 'processing', message: 'Scanning folder...' });
+
+    let files: File[];
+    let skipped: number;
+    try {
+      ({ files, skipped } = await getFilesFromDataTransfer(e.dataTransfer));
+    } catch {
+      if (sessionRef.current !== session) return;
+      setUiState({ status: 'error', message: 'Failed to read folder contents.' });
+      return;
+    }
+    if (sessionRef.current !== session) return;
+
+    if (files.length === 0) {
+      setUiState({ status: 'error', message: 'No supported files found in folder.' });
+      return;
+    }
+
+    if (files.length > MAX_FILES) {
+      setUiState({
+        status: 'error',
+        message: `Found ${files.length} supported files. Maximum 20 files at once — select fewer files or a subfolder.`,
+      });
+      return;
+    }
+
+    // Show summary before processing
+    const skippedNote = skipped > 0 ? ` (${skipped} skipped — unsupported format)` : '';
+    setUiState({
+      status: 'processing',
+      message: `Found ${files.length} supported file${files.length !== 1 ? 's' : ''}${skippedNote}`,
+    });
+
+    // Yield to let summary paint before processing replaces it
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    if (sessionRef.current !== session) return;
+
+    if (files.length === 1) {
+      handleSingleFile(files[0]);
+    } else {
+      void processBatch(files, session);
+    }
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
