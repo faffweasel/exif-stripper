@@ -1,6 +1,6 @@
 # EXIF Stripper
 
-Strip metadata from images, video, and PDF files entirely in your browser. No files touch any server.
+Strip metadata from images, video, and audio files entirely in your browser. No files touch any server.
 
 **Live:** https://exif.faffweasel.com
 
@@ -26,6 +26,7 @@ Strip metadata from images, video, and PDF files entirely in your browser. No fi
 | GIF | Comment extensions, XMP application extensions |
 | MP4 | User data (udta), XMP, GPS coordinates |
 | MOV | User data (udta), XMP, GPS coordinates |
+| M4A | User data (udta), XMP, iTunes-style tags |
 
 ## How It Works
 

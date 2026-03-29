@@ -296,6 +296,13 @@ export function DropZone({ isDark }: Props) {
         });
         return;
       }
+      if (detectFormat(buffer) === null) {
+        setUiState({
+          status: 'error',
+          message: `"${file.name}" is not a supported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF, MP4, and MOV.`,
+        });
+        return;
+      }
       setUiState({ status: 'preview', file, originalBuffer: buffer });
     };
     reader.onerror = () => {
@@ -634,7 +641,7 @@ export function DropZone({ isDark }: Props) {
         ref={inputRef}
         type="file"
         multiple
-        accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.gif,.mp4,.mov,.m4v"
+        accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.gif,.mp4,.mov,.m4v,.m4a"
         className="hidden"
         onChange={handleInputChange}
         aria-label="Select files to strip metadata"
@@ -670,7 +677,7 @@ export function DropZone({ isDark }: Props) {
               Drop files here or click to select
             </div>
             <div className="text-[14px]" style={{ color: 'var(--faint)' }}>
-              JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV — 20 files max
+              JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV · M4A — 20 files max
             </div>
           </>
         )}
@@ -880,7 +887,7 @@ export function DropZone({ isDark }: Props) {
         className="text-center text-[13px] mb-6"
         style={{ color: 'var(--muted)', fontFamily: '"Courier New", Courier, monospace' }}
       >
-        Supports JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV
+        Supports JPEG · PNG · WebP · HEIC · AVIF · GIF · MP4 · MOV · M4A
       </div>
     </>
   );
