@@ -8,6 +8,10 @@ ArrayBuffer manipulation only — no canvas redraw, no re-encoding.
 
 React + Vite + TypeScript + Tailwind CSS v4. Single-page app, no routing. Biome for linting/formatting (not ESLint/Prettier).
 
+### Workflow control
+
+After invoking any subagent (qa-reviewer, test-writer, etc.), STOP and present the findings. Do not act on agent recommendations automatically. Wait for explicit instructions on which findings to address and how. Agent output is advisory — I review and decide what to fix.
+
 ## Architecture
 
 - `src/lib/` — pure stripping logic, extracted as npm package later (`@faffweasel/strip-metadata`)
