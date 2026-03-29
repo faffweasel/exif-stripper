@@ -6,13 +6,13 @@ Strip metadata from images, video, and audio files entirely in your browser. No 
 
 ## Screenshots
 
-![Empty drop zone showing supported format indicators](docs/screenshots/empty.png)
+![Empty drop zone showing supported format indicators](docs/empty.png)
 
-![Single file with metadata comparison showing fields before and after stripping](docs/screenshots/single.png)
+![Single file with metadata comparison showing fields before and after stripping](docs/single.png)
 
-![Batch processing multiple files with progress indicators](docs/screenshots/batch.png)
+![Batch processing multiple files with progress indicators](docs/batch.png)
 
-![Dark mode view of the EXIF Stripper interface](docs/screenshots/darkmode.png)
+![Dark mode view of the EXIF Stripper interface](docs/darkmode.png)
 
 ## Supported Formats
 
