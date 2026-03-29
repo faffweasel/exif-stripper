@@ -1,6 +1,6 @@
 import { zipSync } from 'fflate';
 import { useEffect, useRef, useState } from 'react';
-import { detectFormat, type ImageFormat } from '../lib/detect-format';
+import { detectFormat, type MediaFormat } from '../lib/detect-format';
 import type { StripResult } from '../lib/strip';
 import { stripMetadata } from '../lib/strip';
 import { getFilesFromDataTransfer } from '../utils/folder-enumerate';
@@ -21,7 +21,7 @@ interface FileEntry {
 type UIState =
   | { status: 'idle' }
   | { status: 'error'; message: string }
-  | { status: 'preview'; file: File; originalBuffer: ArrayBuffer; format: ImageFormat }
+  | { status: 'preview'; file: File; originalBuffer: ArrayBuffer; format: MediaFormat }
   | { status: 'processing'; message: string }
   | {
       status: 'done';
@@ -84,11 +84,24 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function deduplicateFilename(name: string, used: Set<string>): string {
+  if (!used.has(name)) return name;
+  const dot = name.lastIndexOf('.');
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  let n = 2;
+  while (used.has(`${base} (${n})${ext}`)) n++;
+  return `${base} (${n})${ext}`;
+}
+
 function downloadAllAsZip(entries: readonly FileEntry[]): void {
   const files: Record<string, [Uint8Array, { level: 0 }]> = {};
+  const usedNames = new Set<string>();
   for (const entry of entries) {
     if (entry.status === 'done' && entry.result) {
-      files[entry.file.name] = [entry.result.data, { level: 0 }];
+      const name = deduplicateFilename(entry.file.name, usedNames);
+      usedNames.add(name);
+      files[name] = [entry.result.data, { level: 0 }];
     }
   }
   const zip = zipSync(files);
@@ -120,8 +133,6 @@ interface FileRowProps {
 }
 
 function FileRow({ entry, isSelected, onSelect, onDownload }: FileRowProps) {
-  const mono = 'inherit';
-
   const statusIconColor =
     entry.status === 'done'
       ? 'var(--accent)'
@@ -172,7 +183,6 @@ function FileRow({ entry, isSelected, onSelect, onDownload }: FileRowProps) {
       style={{
         borderBottom: '1px solid var(--border)',
         background: isSelected ? 'var(--row-select-bg)' : 'transparent',
-        fontFamily: mono,
         fontSize: 14,
       }}
     >
@@ -191,7 +201,6 @@ function FileRow({ entry, isSelected, onSelect, onDownload }: FileRowProps) {
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              fontFamily: mono,
               fontSize: 14,
             }}
           >
@@ -221,7 +230,6 @@ function FileRow({ entry, isSelected, onSelect, onDownload }: FileRowProps) {
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              fontFamily: mono,
               fontSize: 14,
               flexShrink: 0,
               padding: '7px 0 7px 8px',
@@ -287,7 +295,7 @@ export function DropZone() {
     }
   }, [batchComplete]);
 
-  function handleSingleFile(file: File) {
+  async function handleSingleFile(file: File) {
     // Reject files over the video limit upfront (format-specific limit checked after reading)
     if (file.size > MAX_VIDEO_SIZE) {
       setUiState({ status: 'error', message: 'File too large. Maximum size is 500 MB.' });
@@ -295,34 +303,36 @@ export function DropZone() {
     }
     const session = sessionRef.current;
     setUiState({ status: 'processing', message: 'Reading file...' });
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (sessionRef.current !== session) return;
-      const buffer = reader.result as ArrayBuffer; // safe: readAsArrayBuffer always returns ArrayBuffer
-      const limit = maxSizeForBuffer(buffer);
-      if (file.size > limit) {
-        const isVideo = limit === MAX_VIDEO_SIZE;
-        setUiState({
-          status: 'error',
-          message: `File too large. Maximum size for ${isVideo ? 'video' : 'images'} is ${maxSizeLabel(isVideo)}.`,
-        });
-        return;
-      }
-      const format = detectFormat(buffer);
-      if (format === null) {
-        setUiState({
-          status: 'error',
-          message: `"${file.name}" is not a supported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF, MP4, and MOV.`,
-        });
-        return;
-      }
-      setUiState({ status: 'preview', file, originalBuffer: buffer, format });
-    };
-    reader.onerror = () => {
+
+    let buffer: ArrayBuffer;
+    try {
+      buffer = await readFileAsArrayBuffer(file);
+    } catch {
       if (sessionRef.current !== session) return;
       setUiState({ status: 'error', message: 'Failed to read file.' });
-    };
-    reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    if (sessionRef.current !== session) return;
+
+    const limit = maxSizeForBuffer(buffer);
+    if (file.size > limit) {
+      const isVideo = limit === MAX_VIDEO_SIZE;
+      setUiState({
+        status: 'error',
+        message: `File too large. Maximum size for ${isVideo ? 'video' : 'images'} is ${maxSizeLabel(isVideo)}.`,
+      });
+      return;
+    }
+    const format = detectFormat(buffer);
+    if (format === null) {
+      setUiState({
+        status: 'error',
+        message: `"${file.name}" is not a supported format. Supported: JPEG, PNG, WebP, HEIC, AVIF, GIF, MP4, and MOV.`,
+      });
+      return;
+    }
+    setUiState({ status: 'preview', file, originalBuffer: buffer, format });
   }
 
   function handleStrip() {
@@ -631,11 +641,15 @@ export function DropZone() {
   const bgColor = isDragging ? 'var(--drop-drag-bg)' : 'var(--surface)';
 
   const batchProcessingIdx =
-    uiState.status === 'batch' ? uiState.entries.findIndex((e) => e.status === 'processing') : -1;
+    uiState.status === 'batch'
+      ? uiState.entries.findIndex((entry) => entry.status === 'processing')
+      : -1;
   const batchSelected =
     uiState.status === 'batch' && selectedIndex !== null ? uiState.entries[selectedIndex] : null;
   const batchDoneCount =
-    uiState.status === 'batch' ? uiState.entries.filter((e) => e.status === 'done').length : 0;
+    uiState.status === 'batch'
+      ? uiState.entries.filter((entry) => entry.status === 'done').length
+      : 0;
 
   const dropZoneLabel = (() => {
     switch (uiState.status) {

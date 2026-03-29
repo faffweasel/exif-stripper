@@ -1,4 +1,4 @@
-export type ImageFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif' | 'mp4' | 'mov';
+export type MediaFormat = 'jpeg' | 'png' | 'webp' | 'heic' | 'avif' | 'gif' | 'mp4' | 'mov';
 
 const AVIF_BRANDS = new Set(['avif', 'avis']);
 const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis']);
@@ -19,7 +19,7 @@ const MP4_BRANDS = new Set([
 ]);
 const MOV_BRANDS = new Set(['qt  ']);
 
-export function detectFormat(buffer: ArrayBuffer): ImageFormat | null {
+export function detectFormat(buffer: ArrayBuffer): MediaFormat | null {
   if (buffer.byteLength < 12) return null;
 
   const bytes = new Uint8Array(buffer, 0, 12);

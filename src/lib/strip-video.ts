@@ -94,17 +94,22 @@ function boxHeaderSize(src: Uint8Array, box: RawBox): number {
   return r32(src, box.start) === 1 ? 16 : 8;
 }
 
-function rebuildMoov(src: Uint8Array, box: RawBox): Uint8Array {
-  const children = scanBoxes(src, box.start + boxHeaderSize(src, box), box.start + box.size);
+function rebuildContainer(src: Uint8Array, box: RawBox): Uint8Array {
+  const hdr = boxHeaderSize(src, box);
+  const children = scanBoxes(src, box.start + hdr, box.start + box.size);
   const keptChildren = children.filter((c) => !MOOV_REMOVE.has(c.type));
 
-  // Nothing to remove — return original
-  if (keptChildren.length === children.length) {
-    return src.subarray(box.start, box.start + box.size);
-  }
+  // Recurse into trak boxes to strip per-track udta/meta
+  const childBuffers = keptChildren.map((c) =>
+    c.type === 'trak' ? rebuildContainer(src, c) : src.subarray(c.start, c.start + c.size)
+  );
 
-  const childBuffers = keptChildren.map((c) => src.subarray(c.start, c.start + c.size));
-  return buildBox('moov', concat(childBuffers));
+  const changed =
+    keptChildren.length !== children.length ||
+    childBuffers.some((buf, i) => buf.length !== keptChildren[i].size);
+
+  if (!changed) return src.subarray(box.start, box.start + box.size);
+  return buildBox(box.type, concat(childBuffers));
 }
 
 // --- stco / co64 chunk offset adjustment ---
@@ -182,7 +187,7 @@ export function stripVideo(buffer: ArrayBuffer): Uint8Array {
 
   // Rebuild moov (potentially smaller after removing udta/meta)
   const moovBox = topBoxes.find((b) => b.type === 'moov');
-  let rebuiltMoov = moovBox ? rebuildMoov(src, moovBox) : null;
+  let rebuiltMoov = moovBox ? rebuildContainer(src, moovBox) : null;
   const moovShrinkage = moovBox && rebuiltMoov ? moovBox.size - rebuiltMoov.length : 0;
 
   // Compute byte shifts from removed/shrunk top-level boxes (sorted by position)

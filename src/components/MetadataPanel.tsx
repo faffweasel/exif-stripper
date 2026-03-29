@@ -1,14 +1,14 @@
 import ExifReader from 'exifreader';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
-import type { ImageFormat } from '../lib/detect-format';
+import type { MediaFormat } from '../lib/detect-format';
 
 interface Props {
   readonly originalBuffer: ArrayBuffer;
   readonly strippedBuffer?: ArrayBuffer;
   readonly fileName: string;
-  readonly filterText?: string;
-  readonly format?: ImageFormat;
+  readonly filterText: string;
+  readonly format?: MediaFormat;
 }
 
 type Category =
@@ -196,7 +196,7 @@ function Section({
 
 const VIDEO_FORMATS = new Set(['mp4', 'mov']);
 
-export function MetadataPanel({ originalBuffer, strippedBuffer, filterText = '', format }: Props) {
+export function MetadataPanel({ originalBuffer, strippedBuffer, filterText, format }: Props) {
   const grouped = useMemo(() => parseGroups(originalBuffer), [originalBuffer]);
   const isStripped = strippedBuffer !== undefined;
 

@@ -1,4 +1,4 @@
-const REMOVE_MARKERS = new Set([0xe1, 0xed]);
+const REMOVE_MARKERS = new Set([0xe1, 0xed, 0xfe]);
 
 // Markers with no length field
 const NO_LENGTH_MARKERS = new Set([

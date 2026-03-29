@@ -36,7 +36,7 @@ function readN(b: Uint8Array, i: number, n: number): number {
     case 8:
       return r32(b, i) * 0x100000000 + r32(b, i + 4);
     default:
-      return 0;
+      throw new Error(`Unsupported field size: ${n}`);
   }
 }
 
@@ -56,7 +56,7 @@ function writeN(b: Uint8Array, i: number, n: number, v: number): void {
       w32(b, i + 4, v >>> 0);
       break;
     default:
-      break;
+      throw new Error(`Unsupported field size: ${n}`);
   }
 }
 

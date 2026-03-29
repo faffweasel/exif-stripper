@@ -1,13 +1,17 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { DropZone } from './components/DropZone';
 import { PrivacyNotice } from './components/PrivacyNotice';
 
 const FONT = '"Courier New", Courier, monospace';
 
 function getInitialDark(): boolean {
-  const stored = localStorage.getItem('theme');
-  if (stored === 'dark') return true;
-  if (stored === 'light') return false;
+  try {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+  } catch {
+    // localStorage unavailable (private browsing, restrictive CSP)
+  }
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
@@ -21,12 +25,16 @@ applyTheme(getInitialDark());
 export default function App() {
   const [isDark, setIsDark] = useState(getInitialDark);
 
-  const handleToggle = useCallback(() => {
+  function handleToggle() {
     const next = !isDark;
     setIsDark(next);
     applyTheme(next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
-  }, [isDark]);
+    try {
+      localStorage.setItem('theme', next ? 'dark' : 'light');
+    } catch {
+      // localStorage unavailable
+    }
+  }
 
   return (
     <div
