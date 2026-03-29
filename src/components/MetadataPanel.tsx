@@ -1,13 +1,14 @@
 import ExifReader from 'exifreader';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
+import type { ImageFormat } from '../lib/detect-format';
 
 interface Props {
   readonly originalBuffer: ArrayBuffer;
   readonly strippedBuffer?: ArrayBuffer;
   readonly fileName: string;
   readonly filterText?: string;
-  readonly format?: string;
+  readonly format?: ImageFormat;
 }
 
 type Category =

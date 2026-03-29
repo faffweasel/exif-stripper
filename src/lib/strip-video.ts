@@ -107,6 +107,62 @@ function rebuildMoov(src: Uint8Array, box: RawBox): Uint8Array {
   return buildBox('moov', concat(childBuffers));
 }
 
+// --- stco / co64 chunk offset adjustment ---
+
+interface ByteShift {
+  readonly endPos: number;
+  readonly removed: number;
+}
+
+const ISOBMFF_CONTAINERS = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl', 'dinf', 'edts']);
+
+function adjustChunkOffsets(moov: Uint8Array, shifts: readonly ByteShift[]): void {
+  function deltaFor(offset: number): number {
+    let d = 0;
+    for (const s of shifts) {
+      if (s.endPos <= offset) d += s.removed;
+      else break;
+    }
+    return d;
+  }
+
+  function walk(start: number, end: number): void {
+    for (const box of scanBoxes(moov, start, end)) {
+      const hdr = r32(moov, box.start) === 1 ? 16 : 8;
+      if (box.type === 'stco') {
+        const entryCount = r32(moov, box.start + hdr + 4);
+        let pos = box.start + hdr + 8;
+        for (let i = 0; i < entryCount; i++) {
+          const orig = r32(moov, pos);
+          const d = deltaFor(orig);
+          if (d > 0) w32(moov, pos, orig - d);
+          pos += 4;
+        }
+      } else if (box.type === 'co64') {
+        const entryCount = r32(moov, box.start + hdr + 4);
+        let pos = box.start + hdr + 8;
+        for (let i = 0; i < entryCount; i++) {
+          const hi = r32(moov, pos);
+          const lo = r32(moov, pos + 4);
+          const orig = hi * 0x100000000 + lo;
+          const d = deltaFor(orig);
+          if (d > 0) {
+            const adjusted = orig - d;
+            w32(moov, pos, Math.floor(adjusted / 0x100000000));
+            w32(moov, pos + 4, adjusted >>> 0);
+          }
+          pos += 8;
+        }
+      } else if (ISOBMFF_CONTAINERS.has(box.type)) {
+        walk(box.start + hdr, box.start + box.size);
+      }
+    }
+  }
+
+  const hdr = r32(moov, 0) === 1 ? 16 : 8;
+  walk(hdr, moov.length);
+}
+
 // --- Public API ---
 
 export function stripVideo(buffer: ArrayBuffer): Uint8Array {
@@ -118,12 +174,43 @@ export function stripVideo(buffer: ArrayBuffer): Uint8Array {
     throw new Error('Not a valid ISOBMFF container: missing ftyp box');
   }
 
+  function isRemoved(box: RawBox): boolean {
+    if (box.type === 'free') return true;
+    if (box.type === 'uuid' && isXmpUuid(src, box)) return true;
+    return false;
+  }
+
+  // Rebuild moov (potentially smaller after removing udta/meta)
+  const moovBox = topBoxes.find((b) => b.type === 'moov');
+  let rebuiltMoov = moovBox ? rebuildMoov(src, moovBox) : null;
+  const moovShrinkage = moovBox && rebuiltMoov ? moovBox.size - rebuiltMoov.length : 0;
+
+  // Compute byte shifts from removed/shrunk top-level boxes (sorted by position)
+  const shifts: ByteShift[] = [];
+  for (const box of topBoxes) {
+    if (isRemoved(box)) {
+      shifts.push({ endPos: box.start + box.size, removed: box.size });
+    } else if (box.type === 'moov' && moovShrinkage > 0) {
+      shifts.push({ endPos: box.start + box.size, removed: moovShrinkage });
+    }
+  }
+  shifts.sort((a, b) => a.endPos - b.endPos);
+
+  // Adjust stco/co64 chunk offsets to account for shifted data positions
+  if (rebuiltMoov && shifts.length > 0) {
+    // rebuildMoov returns a subarray view when moov content is unchanged —
+    // copy before mutating to avoid corrupting the source buffer
+    if (moovShrinkage === 0) {
+      rebuiltMoov = new Uint8Array(rebuiltMoov);
+    }
+    adjustChunkOffsets(rebuiltMoov, shifts);
+  }
+
   const parts: Uint8Array[] = [];
   for (const box of topBoxes) {
-    if (box.type === 'free') continue;
-    if (box.type === 'uuid' && isXmpUuid(src, box)) continue;
-    if (box.type === 'moov') {
-      parts.push(rebuildMoov(src, box));
+    if (isRemoved(box)) continue;
+    if (box.type === 'moov' && rebuiltMoov) {
+      parts.push(rebuiltMoov);
       continue;
     }
     parts.push(src.subarray(box.start, box.start + box.size));

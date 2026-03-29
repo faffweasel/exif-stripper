@@ -1,4 +1,4 @@
-const REMOVE_MARKERS = new Set([0xe1, 0xed, 0xe2]);
+const REMOVE_MARKERS = new Set([0xe1, 0xed]);
 
 // Markers with no length field
 const NO_LENGTH_MARKERS = new Set([
@@ -65,6 +65,10 @@ export function stripJpeg(buffer: ArrayBuffer): Uint8Array {
           if (next !== 0x00 && (next < 0xd0 || next > 0xd7)) break;
         }
         scanPos++;
+      }
+
+      if (scanPos >= src.length) {
+        throw new Error('Truncated JPEG: unexpected end of file after SOS');
       }
 
       // Copy entropy-coded data (after SOS header up to EOI)
