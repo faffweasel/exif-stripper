@@ -1,12 +1,14 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+  "files": { "includes": ["**", "!!dist"] },
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
       "correctness": { "useExhaustiveDependencies": "warn" },
-      "suspicious": { "noExplicitAny": "warn" }
+      "suspicious": { "noExplicitAny": "warn" },
+      "complexity": { "noImportantStyles": "off" }
     }
   },
   "formatter": {
