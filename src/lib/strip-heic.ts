@@ -297,6 +297,7 @@ function adjustIlocOffsets(iloc: Uint8Array, delta: number): Uint8Array {
     const adjustBase = shouldAdjust && baseOffsetSz > 0 && baseOffset > 0;
 
     if (adjustBase) {
+      if (baseOffset < delta) throw new Error('Invalid ISOBMFF: offset underflow');
       writeN(out, baseOffsetPos, baseOffsetSz, baseOffset - delta);
     }
 

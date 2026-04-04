@@ -22,7 +22,7 @@ export function MetadataSearch({ value, onChange }: Props) {
         onChange={(e) => onChange(e.target.value)}
         placeholder="Filter tags... (e.g. GPS, Camera)"
         aria-label="Filter metadata tags"
-        className="w-full px-3 py-1.5 text-[13px] pr-7"
+        className="w-full px-3 py-1.5 text-[14px] pr-7"
         style={{
           fontFamily: '"Courier New", Courier, monospace',
           color: 'var(--text)',
