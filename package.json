@@ -10,6 +10,7 @@
     "licence-check": "npx license-checker --production --summary"
   },
   "dependencies": {
+    "@faffweasel/strip-metadata": "^0.1.0",
     "exifreader": "^4.37.0",
     "fflate": "^0.8.2",
     "react": "^19.2.0",

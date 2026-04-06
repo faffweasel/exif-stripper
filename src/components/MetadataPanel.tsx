@@ -1,7 +1,7 @@
+import type { MediaFormat } from '@faffweasel/strip-metadata';
 import ExifReader from 'exifreader';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
-import type { MediaFormat } from '../lib/detect-format';
 
 interface Props {
   readonly originalBuffer: ArrayBuffer;

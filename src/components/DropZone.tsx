@@ -1,8 +1,11 @@
+import {
+  detectFormat,
+  type MediaFormat,
+  type StripResult,
+  stripMetadata,
+} from '@faffweasel/strip-metadata';
 import { zipSync } from 'fflate';
 import { useEffect, useRef, useState } from 'react';
-import { detectFormat, type MediaFormat } from '../lib/detect-format';
-import type { StripResult } from '../lib/strip';
-import { stripMetadata } from '../lib/strip';
 import { getFilesFromDataTransfer } from '../utils/folder-enumerate';
 import { MetadataPanel } from './MetadataPanel';
 import { MetadataSearch } from './MetadataSearch';
