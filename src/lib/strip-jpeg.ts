@@ -1,5 +1,17 @@
 const REMOVE_MARKERS = new Set([0xe1, 0xed, 0xfe]);
 
+// "ICC_PROFILE\0" identifier (12 bytes) at the start of APP2 payload
+const ICC_PROFILE_ID = new Uint8Array([
+  0x49, 0x43, 0x43, 0x5f, 0x50, 0x52, 0x4f, 0x46, 0x49, 0x4c, 0x45, 0x00,
+]);
+
+function isIccProfile(src: Uint8Array, payloadStart: number): boolean {
+  for (let i = 0; i < ICC_PROFILE_ID.length; i++) {
+    if (src[payloadStart + i] !== ICC_PROFILE_ID[i]) return false;
+  }
+  return true;
+}
+
 // Markers with no length field
 const NO_LENGTH_MARKERS = new Set([
   0xd8, // SOI
@@ -78,6 +90,17 @@ export function stripJpeg(buffer: ArrayBuffer): Uint8Array {
       }
 
       pos = scanPos;
+      continue;
+    }
+
+    // APP2: keep ICC profiles, strip everything else (MPF, gain maps, etc.)
+    if (marker === 0xe2) {
+      const payloadStart = pos + 2; // first byte after 2-byte length field
+      if (isIccProfile(src, payloadStart)) {
+        kept.push([markerStart, segmentEnd]);
+        totalSize += segmentEnd - markerStart;
+      }
+      pos = segmentEnd;
       continue;
     }
 
