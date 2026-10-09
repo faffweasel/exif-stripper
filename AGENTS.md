@@ -118,6 +118,8 @@ export function stripMetadata(buffer: ArrayBuffer): StripResult;
 
 AGPL-3.0
 
+After adding, removing or updating dependencies (including transitive packages), review and update the manually maintained public/licence.txt with the versions and full copyright/licence notices for code or CSS shipped in the website. Keep the application's licence and logo rights consistent with LICENCE and README.md. Vite copies this file to dist/licence.txt during the build.
+
 
 ## Commit Messages
 - Keep commit messages and PR descriptions straightforward like an experienced engineer
